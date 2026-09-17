@@ -183,6 +183,11 @@
         <div class="legend"><span><i style="background:#2f6fed"></i>显式预测期现值</span><span><i style="background:#16a085"></i>终值现值</span></div>
         <div class="chart-title">显式期 vs 终值 占比</div><div id="donut1"></div>
       </div>
+      <div class="card" style="margin-top:18px">
+        <h2>WACC × g₂ 敏感性热力图（每股内在价值）</h2>
+        <div id="heat1" data-wel="wacc" data-gel="g2"></div>
+        <div class="note">横轴=WACC、纵轴=g₂，围绕当前假设 ±2pct(WACC)/±1pct(g₂) 取值；颜色越深=每股内在价值越高。灰色「—」=该组合 WACC≤g₂、终值发散。点击任一有效格，可把该 (WACC,g₂) 写回上方输入框并重新估值。</div>
+      </div>
     </div>
   </div>
 </div>
@@ -235,6 +240,11 @@
         <div class="chart-title">各期现值（含终值）</div><div id="bar2"></div>
         <div class="legend"><span><i style="background:#2f6fed"></i>显式预测期现值</span><span><i style="background:#16a085"></i>终值现值</span></div>
         <div class="chart-title">显式期 vs 终值 占比</div><div id="donut2"></div>
+      </div>
+      <div class="card" style="margin-top:18px">
+        <h2>WACC × g₂ 敏感性热力图（每股内在价值）</h2>
+        <div id="heat2" data-wel="c_wacc" data-gel="c_g2"></div>
+        <div class="note">横轴=WACC、纵轴=g₂，围绕当前假设 ±2pct(WACC)/±1pct(g₂) 取值；颜色越深=每股内在价值越高。灰色「—」=该组合 WACC≤g₂、终值发散。点击任一有效格，可把该 (WACC,g₂) 写回上方输入框并重新估值。</div>
       </div>
     </div>
   </div>
@@ -349,6 +359,64 @@ function renderResults(els,res){
   renderBar(els.bar,data); renderDonut(els.donut,res.explicitPV,res.pvTV);
 }
 
+// ---- 敏感性热力图（共用）----
+function heatColor(t){ // t∈[0,1]，低→浅(#eaf1fe) 高→深(#1f4faf)
+  const a=[234,241,254], b=[31,79,175];
+  const r=a[0]+(b[0]-a[0])*t, g=a[1]+(b[1]-a[1])*t, bl=a[2]+(b[2]-a[2])*t;
+  return `rgb(${r|0},${g|0},${bl|0})`;
+}
+// 两阶段：其余输入取当前值，仅覆盖 wacc/g2，返回每股内在价值（已折算展示币种），无效(WACC≤g2 等)返回 null
+function stagePerShareAt(wp,gp){
+  const f0=readNum('f0'), n=Math.max(1,Math.round(readNum('n')||0));
+  const g1=(readNum('g1')||0)/100, g2=gp/100, wacc=wp/100;
+  const netdebt=readNum('netdebt')||0, shares=readNum('shares')||0;
+  if(!(wacc>g2)||!(f0>0)||!(shares>0)) return null;
+  let pv=0; for(let t=1;t<=n;t++){const f=f0*Math.pow(1+g1,t); pv+=f/Math.pow(1+wacc,t);}
+  const fN=f0*Math.pow(1+g1,n), tv=fN*(1+g2)/(wacc-g2);
+  const eq=(pv+tv/Math.pow(1+wacc,n))-netdebt;
+  const fx=readFx(), hkd=hkdMode()&&fx; return eq/shares/(hkd?fx:1);
+}
+// 自定义现金流：从 #cfRows 取各期流，覆盖 wacc/g2
+function customPerShareAt(wp,gp){
+  const flows=[]; document.querySelectorAll('#cfRows .cfval').forEach(i=>{const v=+i.value; flows.push(isFinite(v)?v:0);});
+  const g2=gp/100, wacc=wp/100, netdebt=readNum('c_netdebt')||0, shares=readNum('c_shares')||0;
+  if(!(wacc>g2)||flows.length===0||!(shares>0)) return null;
+  let pv=0; for(let t=1;t<=flows.length;t++) pv+=flows[t-1]/Math.pow(1+wacc,t);
+  const fN=flows[flows.length-1], tv=fN*(1+g2)/(wacc-g2);
+  const eq=(pv+tv/Math.pow(1+wacc,flows.length))-netdebt;
+  const fx=readFx(), hkd=hkdMode()&&fx; return eq/shares/(hkd?fx:1);
+}
+function renderHeatmap(elId, baseWacc, baseG2, getPerShare){
+  const cont=document.getElementById(elId); if(!cont) return;
+  const wb=+baseWacc, gb=+baseG2;
+  const wVals=[wb-2,wb-1,wb,wb+1,wb+2].filter(x=>x>0);
+  const gVals=[gb-1,gb-0.5,gb,gb+0.5,gb+1].filter(x=>x>0);
+  const cells=[]; let vmin=Infinity, vmax=-Infinity;
+  gVals.forEach(g=> wVals.forEach(w=>{ const v=getPerShare(w,g); cells.push({w,g,v}); if(v!=null){vmin=Math.min(vmin,v);vmax=Math.max(vmax,v);} }));
+  const LM=60, TM=24, CW=92, CH=42;
+  const W=LM+wVals.length*CW, H=TM+gVals.length*CH;
+  let s=`<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px">`;
+  s+=`<text x="6" y="16" font-size="11" fill="#6b7686">g₂↓ / WACC→</text>`;
+  wVals.forEach((w,i)=> s+=`<text x="${LM+i*CW+CW/2}" y="${TM-8}" font-size="11" text-anchor="middle" fill="#1f2733">${w}%</text>`);
+  gVals.forEach((g,j)=>{
+    s+=`<text x="${LM-8}" y="${TM+j*CH+CH/2+4}" font-size="11" text-anchor="end" fill="#1f2733">${g}%</text>`;
+    wVals.forEach((w,i)=>{
+      const c=cells.find(x=>x.w===w&&x.g===g); const x=LM+i*CW, y=TM+j*CH;
+      if(c.v==null){ s+=`<rect x="${x+1}" y="${y+1}" width="${CW-2}" height="${CH-2}" rx="4" fill="#eef0f3"/>`;
+        s+=`<text x="${x+CW/2}" y="${y+CH/2+4}" font-size="12" text-anchor="middle" fill="#9aa4b2">—</text>`; }
+      else{ const t=vmax>vmin?(c.v-vmin)/(vmax-vmin):1; const col=heatColor(t);
+        const cur=(w===wb&&g===gb); const stroke=cur?'#e0962f':'#fff'; const sw=cur?3:1;
+        const txtCol=t>0.55?'#fff':'#1f2733';
+        s+=`<rect class="hcell" data-w="${w}" data-g="${g}" x="${x+1}" y="${y+1}" width="${CW-2}" height="${CH-2}" rx="4" fill="${col}" stroke="${stroke}" stroke-width="${sw}" style="cursor:pointer"/>`;
+        s+=`<text x="${x+CW/2}" y="${y+CH/2+4}" font-size="12" text-anchor="middle" fill="${txtCol}">${c.v.toFixed(1)}</text>`;
+        if(cur) s+=`<text x="${x+CW-12}" y="${y+13}" font-size="12" fill="${txtCol}">★</text>`; }
+    });
+  });
+  s+=`</svg>`;
+  s+=`<div class="legend"><span><i style="background:#eaf1fe"></i>浅=每股价值低</span><span><i style="background:#1f4faf"></i>深=每股价值高</span><span><i style="background:#e0962f"></i>★=当前假设</span></div>`;
+  cont.innerHTML=s;
+}
+
 // ---- 标签1：两阶段固定增长 ----
 function computeStage(){
   const f0=readNum('f0'), n=Math.max(1,Math.round(readNum('n')||0));
@@ -369,6 +437,7 @@ function recalcStage(){
   document.getElementById('assume1').innerHTML=
     `假设速览：F₀=<b>${fmt(p.f0)}</b> · N=<b>${p.n}</b>年 · g₁=<b>${p.g1}%</b> · g₂=<b>${p.g2}%</b> · WACC=<b>${p.wacc}%</b> · 净负债=<b>${fmt(p.netdebt)}</b> · 股数=<b>${fmt(p.shares)}</b>`+(p.price!=null?` · 现价=<b>${fmt(p.price)}</b>`:'');
   renderResults({err:document.getElementById('err1'),cards:document.getElementById('cards1'),tbody:document.querySelector('#detail1 tbody'),bar:document.getElementById('bar1'),donut:document.getElementById('donut1')}, computeStage());
+  renderHeatmap('heat1', readNum('wacc'), readNum('g2'), stagePerShareAt);
 }
 
 // ---- 标签2：自定义现金流 + 永续 ----
@@ -399,6 +468,7 @@ function recalcCustom(){
   document.getElementById('assume2').innerHTML=
     `假设速览：共 <b>${document.querySelectorAll('#cfRows .cfval').length}</b> 期 · g₂=<b>${g2}%</b> · WACC=<b>${wacc}%</b> · 净负债=<b>${fmt(netdebt)}</b> · 股数=<b>${fmt(shares)}</b>`+(price!=null?` · 现价=<b>${fmt(price)}</b>`:'');
   renderResults({err:document.getElementById('err2'),cards:document.getElementById('cards2'),tbody:document.querySelector('#detail2 tbody'),bar:document.getElementById('bar2'),donut:document.getElementById('donut2')}, computeCustom());
+  renderHeatmap('heat2', readNum('c_wacc'), readNum('c_g2'), customPerShareAt);
 }
 
 // ---- 标签3：老唐估值法 ----
@@ -658,6 +728,18 @@ document.getElementById('stockPick').addEventListener('change',onStockPick);
 function recalcAll(){ recalcStage(); recalcCustom(); recalcLaotang(); }
 document.getElementById('fx').addEventListener('input',recalcAll);
 document.getElementById('showHkd').addEventListener('change',recalcAll);
+// 敏感性热力图：点击单元格把 (WACC,g₂) 回填到对应输入框并重新估值（委托监听，绑定一次）
+['heat1','heat2'].forEach(id=>{
+  const c=document.getElementById(id); if(!c) return;
+  c.addEventListener('click', e=>{
+    const r=e.target.closest && e.target.closest('rect[data-w]'); if(!r) return;
+    const wel=c.dataset.wel, gel=c.dataset.gel;
+    const we=document.getElementById(wel), ge=document.getElementById(gel);
+    if(!we||!ge) return;
+    we.value=r.dataset.w; ge.value=r.dataset.g;
+    we.dispatchEvent(new Event('input',{bubbles:true})); // 触发 recalc → 重渲染热力图并移动高亮
+  });
+});
 // 自定义现金流标签默认预填四期示例
 [1463,1704,2058,2390].forEach(v=>addCfRow(v));
 refreshStockList();

@@ -252,6 +252,64 @@ log.push('— WACC / g₂ 说明备注（两阶段 + 自定义现金流）—');
   ok(p + ' 备注用可折叠 details', !!doc.querySelector('#' + p + ' details.note2 > summary'));
 });
 
+log.push('— 敏感性热力图 heat1（两阶段固定增长）—');
+// 还原标签① 默认参数，确保确定性
+setVal('f0', 2000); setVal('n', 5); setVal('g1', 12); setVal('g2', 3); setVal('wacc', 9); setVal('netdebt', 0); setVal('shares', 93); setVal('price', 370);
+function heatCell(svgId, w, g){
+  const r = doc.querySelector('#' + svgId + ' rect[data-w="' + w + '"][data-g="' + g + '"]');
+  if(!r) return null;
+  const t = r.nextElementSibling; // 紧跟 rect 的数值 text
+  return t ? num(t.textContent) : null;
+}
+ok('heat1 容器存在', !!doc.getElementById('heat1'));
+ok('heat1 已渲染 SVG', /<svg/.test(htmlOf('heat1')));
+ok('heat1 渲染 25 个可点击单元', doc.querySelectorAll('#heat1 rect[data-w]').length === 25, 'cells=' + doc.querySelectorAll('#heat1 rect[data-w]').length);
+ok('heat1 当前点(9%/3%)有 ★ 高亮', /★/.test(htmlOf('heat1')));
+ok('heat1 默认无发散灰格', !/—/.test(htmlOf('heat1')));
+ok('heat1 同 g₂ 下 WACC 越低每股价值越高(7% > 11%)', (() => { const a=heatCell('heat1',7,2), b=heatCell('heat1',11,2); return a!=null && b!=null && a > b; })(), '7%=' + heatCell('heat1',7,2) + ' 11%=' + heatCell('heat1',11,2));
+ok('heat1 单元值=页面 stagePerShareAt 计算值', (() => { const v=heatCell('heat1',11,2), e=dom.window.stagePerShareAt(11,2); return v!=null && e!=null && Math.abs(v-e) < 0.05; })());
+ok('heat1 同列 g₂ 越高值越高(2% < 4%)', (() => { const a=heatCell('heat1',9,2), b=heatCell('heat1',9,4); return a!=null && b!=null && a < b; })(), 'g2=2%=' + heatCell('heat1',9,2) + ' g2=4%=' + heatCell('heat1',9,4));
+// 边界 A：当前 wacc=9 > g2=8 → 主结果仍有效；但网格里 WACC≤g₂ 的单元灰显
+setVal('g2', 8);
+ok('heat1 当前点(9%,8%)有效(9>8)，主结果不报错', txt('err1') === '');
+const gray = doc.querySelectorAll('#heat1 rect:not([data-w])').length;
+ok('heat1 发散灰格数=9（WACC≤g₂ 的单元）', gray === 9, 'gray=' + gray);
+ok('heat1 灰格显示 —', /—/.test(htmlOf('heat1')));
+setVal('g2', 3); setVal('wacc', 9);
+ok('heat1 还原后 err1 清空', txt('err1') === '');
+// 边界 B：当前 wacc=9 ≤ g2=10 → 主结果报终值发散（网格仍按单元独立计算）
+setVal('g2', 10);
+ok('heat1 当前点(9%,10%)发散：主结果报终值发散', /终值发散/.test(txt('err1')));
+setVal('g2', 3); setVal('wacc', 9);
+ok('heat1 还原后 err1 清空', txt('err1') === '');
+// 点击回填：点 (11,4) → WACC=11, g2=4，高亮跟随
+const t1 = doc.querySelector('#heat1 rect[data-w="11"][data-g="4"]');
+t1.dispatchEvent(new dom.window.Event('click', { bubbles: true }));
+ok('点击 heat1(11,4) 回填 WACC=11', num(doc.getElementById('wacc').value) === 11, doc.getElementById('wacc').value);
+ok('点击 heat1(11,4) 回填 g₂=4', num(doc.getElementById('g2').value) === 4, doc.getElementById('g2').value);
+ok('回填后 ★ 移动到 (11,4)', /data-w="11"[^>]*data-g="4"/.test(htmlOf('heat1')) && /★/.test(htmlOf('heat1')));
+setVal('wacc', 9); setVal('g2', 3); // 还原
+// 港股模式：heat1 数值应整体变小（÷fx）
+setVal('shares', 90.95); setVal('price', 426); setVal('fx', 0.856);
+doc.getElementById('showHkd').checked = true; fire('showHkd', 'change');
+ok('港股模式 heat1 数值=stagePerShareAt(含÷fx)', (() => { const v=heatCell('heat1',9,3), e=dom.window.stagePerShareAt(9,3); return v!=null && e!=null && Math.abs(v-e) < 0.05; })(), 'v=' + heatCell('heat1',9,3) + ' e=' + dom.window.stagePerShareAt(9,3));
+ok('港股模式 heat1 数值≈644(明显小于人民币口径)', (() => { const v=heatCell('heat1',9,3); return v>600 && v<700; })(), heatCell('heat1',9,3));
+doc.getElementById('showHkd').checked = false; fire('showHkd', 'change');
+
+log.push('— 敏感性热力图 heat2（自定义现金流）—');
+setVal('c_g2', 3); setVal('c_wacc', 9); setVal('c_shares', 93); setVal('c_netdebt', 0); setVal('c_price', 370);
+const cfNow = [...doc.querySelectorAll('#cfRows .cfval')].map(i => +i.value);
+if (cfNow.join(',') !== '1463,1704,2058,2390') { doc.getElementById('cfRows').innerHTML = ''; [1463,1704,2058,2390].forEach(v => dom.window.addCfRow(v)); }
+ok('heat2 渲染 25 个可点击单元', doc.querySelectorAll('#heat2 rect[data-w]').length === 25, 'cells=' + doc.querySelectorAll('#heat2 rect[data-w]').length);
+ok('heat2 当前点(9%/3%)有 ★ 高亮', /★/.test(htmlOf('heat2')));
+ok('heat2 单元值=页面 customPerShareAt 计算值', (() => { const v=heatCell('heat2',11,2), e=dom.window.customPerShareAt(11,2); return v!=null && e!=null && Math.abs(v-e) < 0.05; })(), 'v=' + heatCell('heat2',11,2) + ' e=' + dom.window.customPerShareAt(11,2));
+ok('heat2 同 g₂ 下 WACC 越低值越高', (() => { const a=heatCell('heat2',7,2), b=heatCell('heat2',11,2); return a!=null && b!=null && a > b; })(), '7%=' + heatCell('heat2',7,2) + ' 11%=' + heatCell('heat2',11,2));
+const t2 = doc.querySelector('#heat2 rect[data-w="7"][data-g="2"]');
+t2.dispatchEvent(new dom.window.Event('click', { bubbles: true }));
+ok('点击 heat2(7,2) 回填 c_wacc=7', num(doc.getElementById('c_wacc').value) === 7, doc.getElementById('c_wacc').value);
+ok('点击 heat2(7,2) 回填 c_g2=2', num(doc.getElementById('c_g2').value) === 2, doc.getElementById('c_g2').value);
+setVal('c_wacc', 9); setVal('c_g2', 3); // 还原
+
 console.log(log.join('\n'));
 console.log('\n结果：' + pass + ' 通过 / ' + fail + ' 失败');
 process.exit(fail ? 1 : 0);
