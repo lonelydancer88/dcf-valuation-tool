@@ -249,8 +249,12 @@
         <label>第三年自由现金流（F3）</label>
         <input id="l_f3" type="number" value="2000" step="any"><div class="hint">老唐原版用净利润，此处按你的口径用自由现金流</div>
       </div>
-      <div class="field"><label>合理 PE 档</label>
-        <div style="font-size:13px;color:var(--ink);padding:6px 0">固定两档对照：<b>25</b> / <b>30</b></div>
+      <div class="field"><label>合理 PE 档（两档对照，可自填）</label>
+        <div class="row2">
+          <input id="l_pe1" type="number" step="any" value="25" placeholder="PE 档 1">
+          <input id="l_pe2" type="number" step="any" value="30" placeholder="PE 档 2">
+        </div>
+        <div class="hint">默认 25 / 30；买点取较低档、卖点取较高档</div>
       </div>
       <div class="row2">
         <div class="field"><label>流通股数（可选）</label><input id="l_shares" type="number" value="93" step="any"><div class="hint">折每股买/卖点</div></div>
@@ -264,11 +268,11 @@
       <div class="card">
         <h2>两档对照（买点=估值×50%，卖点=估值×150%）</h2>
         <table class="ltable" id="ltable">
-          <thead><tr><th>项目</th><th>PE = 25</th><th>PE = 30</th></tr></thead>
+          <thead><tr><th>项目</th><th id="lth1">PE = 25</th><th id="lth2">PE = 30</th></tr></thead>
           <tbody></tbody>
         </table>
         <div class="note">币种：表中金额默认<b>人民币</b>（按 F3 的计价币种）；开启「港股模式」后，表末再附一组<b>港元</b>换算行（按上方汇率换算）。
-          买点参考线取 PE25（保守），卖点参考线取 PE30（乐观）；状态按当前市值落在 [PE25买点, PE30卖点] 区间判定。
+          买点参考线取较低的 PE 档（保守），卖点参考线取较高的 PE 档（乐观）；状态按当前市值落在 [买点, 卖点] 区间判定。
           老唐附加规则：当年动态 PE ≥ 50 倍时即便未到卖点也应卖。<br>
           三大前提（适用条件）：利润为真、利润可持续、维持当前盈利能力无需大量新增资本投入。</div>
       </div>
@@ -400,14 +404,20 @@ function recalcCustom(){
 // ---- 标签3：老唐估值法 ----
 function computeLaotang(){
   const f3=readNum('l_f3'), shares=readNum('l_shares')||0, price=readNum('l_price');
+  let pe1=readNum('l_pe1'), pe2=readNum('l_pe2');            // 合理 PE 可自填
+  if(!(pe1>0)) pe1=25; if(!(pe2>0)) pe2=30;
   if(!(f3>0)) return {error:'请填写第三年自由现金流（正数）。'};
-  const res=[25,30].map(pe=>{const val=f3*pe; return {pe,val,buy:val*0.5,sell:val*1.5,buySh:shares>0?val*0.5/shares:null,sellSh:shares>0?val*1.5/shares:null};});
+  const res=[pe1,pe2].map(pe=>{const val=f3*pe; return {pe,val,buy:val*0.5,sell:val*1.5,buySh:shares>0?val*0.5/shares:null,sellSh:shares>0?val*1.5/shares:null};});
+  // 买点取较低 PE 档（保守）、卖点取较高 PE 档（乐观）
+  const buyIdx = pe1<=pe2 ? 0 : 1, sellIdx = pe1<=pe2 ? 1 : 0;
+  const buySrc=res[buyIdx], sellSrc=res[sellIdx];
   const curCap=(price!=null&&shares>0)?price*shares:null;
-  return {res,curCap,price,shares};
+  return {res,curCap,price,shares,buySrc,sellSrc};
 }
 function recalcLaotang(){
   const f3=readNum('l_f3'), shares=readNum('l_shares'), price=readNum('l_price');
-  document.getElementById('assume3').innerHTML=`假设速览：F3=<b>${fmt(f3)}</b> · PE 档=<b>25 / 30</b>`+(shares?` · 股数=<b>${fmt(shares)}</b>`:'')+(price!=null?` · 现价=<b>${fmt(price)}</b>`:'');
+  const pe1=readNum('l_pe1')||25, pe2=readNum('l_pe2')||30;
+  document.getElementById('assume3').innerHTML=`假设速览：F3=<b>${fmt(f3)}</b> · PE 档=<b>${pe1} / ${pe2}</b>`+(shares?` · 股数=<b>${fmt(shares)}</b>`:'')+(price!=null?` · 现价=<b>${fmt(price)}</b>`:'');
   const r=computeLaotang();
   const cards=document.getElementById('cards3'), tb=document.querySelector('#ltable tbody');
   if(r.error){document.getElementById('err3').textContent=r.error; cards.innerHTML=''; tb.innerHTML=''; return;}
@@ -416,7 +426,7 @@ function recalcLaotang(){
   let html='';
   if(r.curCap!=null){
     const fx=readFx(), hkd=hkdMode()&&fx, adj=hkd?fx:1, unit=hkd?'港元':'人民币';
-    const buyLine=r.res[0].buy/adj, sellLine=r.res[1].sell/adj; // 换算到与股价同币种再比
+    const buyLine=r.buySrc.buy/adj, sellLine=r.sellSrc.sell/adj; // 低PE档买点 / 高PE档卖点，换算到与股价同币种再比
     let cls,label;
     if(r.curCap<buyLine){cls='good';label='低估（可买）';}
     else if(r.curCap>sellLine){cls='bad';label='高估（可卖）';}
@@ -426,15 +436,15 @@ function recalcLaotang(){
       <div class="sub">买线 ${fmt(buyLine)} / 卖线 ${fmt(sellLine)}（${unit}）</div></div>`;
   }else{
     const fx2=readFx(), hkd2=hkdMode()&&fx2, adj2=hkd2?fx2:1, unit2=hkd2?'港元':'人民币';
-    html+=`<div class="rc"><div class="k">买点参考线(PE25)</div><div class="v">${fmt(r.res[0].buy/adj2)}</div><div class="sub">${unit2}</div></div>
-      <div class="rc"><div class="k">卖点参考线(PE30)</div><div class="v">${fmt(r.res[1].sell/adj2)}</div><div class="sub">${unit2}</div></div>`;
+    html+=`<div class="rc"><div class="k">买点参考线(PE${r.buySrc.pe})</div><div class="v">${fmt(r.buySrc.buy/adj2)}</div><div class="sub">${unit2}</div></div>
+      <div class="rc"><div class="k">卖点参考线(PE${r.sellSrc.pe})</div><div class="v">${fmt(r.sellSrc.sell/adj2)}</div><div class="sub">${unit2}</div></div>`;
   }
   // 港元换算卡片（与另两个标签一致，醒目展示折算结果）
   if(hkdMode()){
     const fx3=readFx();
     if(fx3){
       const c=v=>v/fx3;
-      html+=`<div class="rc hkd"><div class="k">三年后合理估值（港元）</div><div class="v" style="font-size:17px">${fmt(c(r.res[0].val))} / ${fmt(c(r.res[1].val))}</div><div class="sub">PE25 / PE30</div></div>
+      html+=`<div class="rc hkd"><div class="k">三年后合理估值（港元）</div><div class="v" style="font-size:17px">${fmt(c(r.res[0].val))} / ${fmt(c(r.res[1].val))}</div><div class="sub">PE ${r.res[0].pe} / ${r.res[1].pe}</div></div>
         <div class="rc hkd"><div class="k">理想买点（港元）</div><div class="v" style="font-size:17px">${fmt(c(r.res[0].buy))} / ${fmt(c(r.res[1].buy))}</div><div class="sub">合理估值 ×50%</div></div>
         <div class="rc hkd"><div class="k">一年内卖点（港元）</div><div class="v" style="font-size:17px">${fmt(c(r.res[0].sell))} / ${fmt(c(r.res[1].sell))}</div><div class="sub">合理估值 ×150%</div></div>`;
     }
@@ -461,6 +471,8 @@ function recalcLaotang(){
       (r.res[0].buySh!=null? row('每股买点（港元）', fmt(c(r.res[0].buySh),1), fmt(c(r.res[1].buySh),1)):'')+
       (r.res[0].sellSh!=null? row('每股卖点（港元）', fmt(c(r.res[0].sellSh),1), fmt(c(r.res[1].sellSh),1)):'');
   }
+  document.getElementById('lth1').textContent='PE = '+r.res[0].pe;
+  document.getElementById('lth2').textContent='PE = '+r.res[1].pe;
   tb.innerHTML=rows;
 }
 
@@ -633,7 +645,7 @@ function fetchLive(){
 // ---- 初始化 ----
 ['f0','n','g1','g2','wacc','netdebt','shares','price'].forEach(id=>document.getElementById(id).addEventListener('input',recalcStage));
 ['c_g2','c_wacc','c_netdebt','c_shares','c_price'].forEach(id=>document.getElementById(id).addEventListener('input',recalcCustom));
-['l_f3','l_shares','l_price'].forEach(id=>document.getElementById(id).addEventListener('input',recalcLaotang));
+['l_f3','l_shares','l_price','l_pe1','l_pe2'].forEach(id=>document.getElementById(id).addEventListener('input',recalcLaotang));
 document.getElementById('stockName').addEventListener('input',onStockInput);
 document.getElementById('stockName').addEventListener('change',onStockInput);
 let _lastAutoFetch='';

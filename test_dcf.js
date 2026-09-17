@@ -229,6 +229,22 @@ ok('下拉选腾讯 → 自动开港股模式', doc.getElementById('showHkd').ch
 setVal('stockName', '测试股Y'); doc.getElementById('shares').value = 50; dom.window.savePreset();
 ok('存预设后下拉同步新增', [...doc.getElementById('stockPick').options].some(o => o.value === '测试股Y'));
 
+log.push('— 老唐：合理 PE 可自填 —');
+const lt = () => doc.querySelector('#ltable tbody').textContent;
+ok('默认 PE 输入为 25 / 30', num(doc.getElementById('l_pe1').value) === 25 && num(doc.getElementById('l_pe2').value) === 30);
+setVal('l_pe1', 20); setVal('l_pe2', 40);
+ok('PE 改 20/40 → 估值 40,000 / 80,000', /40,000/.test(lt()) && /80,000/.test(lt()), lt().slice(0, 90));
+ok('表头同步 PE = 20 / PE = 40', doc.getElementById('lth1').textContent.includes('20') && doc.getElementById('lth2').textContent.includes('40'));
+ok('假设速览 PE 档显示 20 / 40', /20 \/ 40/.test(txt('assume3')), txt('assume3'));
+setVal('l_pe1', 40); setVal('l_pe2', 20); // 反序输入
+ok('反序(40/20) 估值 80,000 / 40,000', /80,000/.test(lt()) && /40,000/.test(lt()));
+setVal('l_price', ''); // 清空现价 → 显示带 PE 标注的参考线
+ok('反序时买点参考线取较低 PE 档（PE20）', /买点参考线\(PE20\)/.test(htmlOf('cards3')), htmlOf('cards3').slice(0, 120));
+ok('反序时卖点参考线取较高 PE 档（PE40）', /卖点参考线\(PE40\)/.test(htmlOf('cards3')));
+setVal('l_price', '426');
+setVal('l_pe1', 25); setVal('l_pe2', 30); // 还原
+ok('还原默认后估值 50,000 / 60,000', /50,000/.test(lt()) && /60,000/.test(lt()));
+
 log.push('— WACC / g₂ 说明备注（两阶段 + 自定义现金流）—');
 ['panel1', 'panel2'].forEach(p => {
   const d = doc.querySelector('#' + p + ' details.note2');
