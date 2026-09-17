@@ -205,6 +205,21 @@ ok('parseQuote A股 总股本=12.50亿', aQ && Math.abs(aQ.shares - 12.5) < 0.01
 ok('parseQuote 空串→null', dom.window.parseQuote('a', '') === null);
 ok('fetchLive 已定义（无网络环境下不崩溃）', typeof dom.window.fetchLive === 'function');
 
+log.push('— 预设下拉（原生 select，兜底 datalist：Safari 不显示 datalist）—');
+const sel = doc.getElementById('stockPick');
+ok('存在 select#stockPick', !!sel);
+ok('下拉含占位 + ≥10 只预设', sel && sel.options.length >= 11, '选项数=' + (sel && sel.options.length));
+['腾讯控股', '贵州茅台', '五粮液', '泸州老窖', '伊利股份', '美的集团', '中国神华', '海康威视', '比亚迪', '赛轮轮胎'].forEach(n => {
+  ok('下拉含 ' + n, [...sel.options].some(o => o.value === n));
+});
+sel.value = '腾讯控股'; fire('stockPick', 'change');
+ok('下拉选腾讯 → 同步 stockName', doc.getElementById('stockName').value === '腾讯控股');
+ok('下拉选腾讯 → 带入股数 90.95', Math.abs(num(doc.getElementById('shares').value) - 90.95) < 0.001, doc.getElementById('shares').value);
+ok('下拉选腾讯 → 自动开港股模式', doc.getElementById('showHkd').checked === true);
+// 存为新预设后，下拉应同步新增
+setVal('stockName', '测试股Y'); doc.getElementById('shares').value = 50; dom.window.savePreset();
+ok('存预设后下拉同步新增', [...doc.getElementById('stockPick').options].some(o => o.value === '测试股Y'));
+
 log.push('— WACC / g₂ 说明备注（两阶段 + 自定义现金流）—');
 ['panel1', 'panel2'].forEach(p => {
   const d = doc.querySelector('#' + p + ' details.note2');
