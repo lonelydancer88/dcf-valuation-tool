@@ -296,6 +296,33 @@ ok('港股模式 heat1 数值=stagePerShareAt(含÷fx)', (() => { const v=heatCe
 ok('港股模式 heat1 数值≈644(明显小于人民币口径)', (() => { const v=heatCell('heat1',9,3); return v>600 && v<700; })(), heatCell('heat1',9,3));
 doc.getElementById('showHkd').checked = false; fire('showHkd', 'change');
 
+log.push('— 敏感性热力图 heat_ev1（企业价值 EV，两阶段固定增长）—');
+setVal('f0', 2000); setVal('n', 5); setVal('g1', 12); setVal('g2', 3); setVal('wacc', 9); setVal('netdebt', 0); setVal('shares', 93); setVal('price', 370);
+ok('heat_ev1 容器存在', !!doc.getElementById('heat_ev1'));
+ok('heat_ev1 已渲染 SVG', /<svg/.test(htmlOf('heat_ev1')));
+ok('heat_ev1 渲染 25 个可点击单元', doc.querySelectorAll('#heat_ev1 rect[data-w]').length === 25, 'cells=' + doc.querySelectorAll('#heat_ev1 rect[data-w]').length);
+ok('heat_ev1 当前点(9%/3%)有 ★ 高亮', /★/.test(htmlOf('heat_ev1')));
+ok('heat_ev1 默认无发散灰格', !/—/.test(htmlOf('heat_ev1')));
+ok('heat_ev1 单元值=页面 stageEVAt 计算值', (() => { const v=heatCell('heat_ev1',11,2), e=dom.window.stageEVAt(11,2); return v!=null && e!=null && Math.abs(v-e) < 0.5; })(), 'v=' + heatCell('heat_ev1',11,2) + ' e=' + dom.window.stageEVAt(11,2));
+// EV 不随股数变化（与每股价值的关键区别）
+setVal('shares', 186);
+ok('heat_ev1 EV 与股数无关（186 股 vs 93 股同值）', Math.abs(heatCell('heat_ev1',9,3) - dom.window.stageEVAt(9,3)) < 0.5, heatCell('heat_ev1',9,3));
+setVal('shares', 93);
+ok('heat_ev1 同 g₂ 下 WACC 越低 EV 越高(7% > 11%)', (() => { const a=heatCell('heat_ev1',7,2), b=heatCell('heat_ev1',11,2); return a!=null && b!=null && a > b; })(), '7%=' + heatCell('heat_ev1',7,2) + ' 11%=' + heatCell('heat_ev1',11,2));
+ok('heat_ev1 同列 g₂ 越高 EV 越高(2% < 4%)', (() => { const a=heatCell('heat_ev1',9,2), b=heatCell('heat_ev1',9,4); return a!=null && b!=null && a < b; })(), 'g2=2%=' + heatCell('heat_ev1',9,2) + ' g2=4%=' + heatCell('heat_ev1',9,4));
+// 港股模式折算
+setVal('shares', 90.95); setVal('price', 426); setVal('fx', 0.856);
+doc.getElementById('showHkd').checked = true; fire('showHkd', 'change');
+ok('港股模式 heat_ev1 数值=stageEVAt(含÷fx)', (() => { const v=heatCell('heat_ev1',9,3), e=dom.window.stageEVAt(9,3); return v!=null && e!=null && Math.abs(v-e) < 0.5; })(), 'v=' + heatCell('heat_ev1',9,3) + ' e=' + dom.window.stageEVAt(9,3));
+doc.getElementById('showHkd').checked = false; fire('showHkd', 'change');
+setVal('shares', 93);
+// 点击回填
+const te1 = doc.querySelector('#heat_ev1 rect[data-w="11"][data-g="4"]');
+te1.dispatchEvent(new dom.window.Event('click', { bubbles: true }));
+ok('点击 heat_ev1(11,4) 回填 WACC=11', num(doc.getElementById('wacc').value) === 11, doc.getElementById('wacc').value);
+ok('点击 heat_ev1(11,4) 回填 g₂=4', num(doc.getElementById('g2').value) === 4, doc.getElementById('g2').value);
+setVal('wacc', 9); setVal('g2', 3);
+
 log.push('— 敏感性热力图 heat2（自定义现金流）—');
 setVal('c_g2', 3); setVal('c_wacc', 9); setVal('c_shares', 93); setVal('c_netdebt', 0); setVal('c_price', 370);
 const cfNow = [...doc.querySelectorAll('#cfRows .cfval')].map(i => +i.value);
@@ -308,6 +335,20 @@ const t2 = doc.querySelector('#heat2 rect[data-w="7"][data-g="2"]');
 t2.dispatchEvent(new dom.window.Event('click', { bubbles: true }));
 ok('点击 heat2(7,2) 回填 c_wacc=7', num(doc.getElementById('c_wacc').value) === 7, doc.getElementById('c_wacc').value);
 ok('点击 heat2(7,2) 回填 c_g2=2', num(doc.getElementById('c_g2').value) === 2, doc.getElementById('c_g2').value);
+setVal('c_wacc', 9); setVal('c_g2', 3); // 还原
+
+log.push('— 敏感性热力图 heat_ev2（企业价值 EV，自定义现金流）—');
+setVal('c_g2', 3); setVal('c_wacc', 9); setVal('c_shares', 93); setVal('c_netdebt', 0); setVal('c_price', 370);
+const cfNow2 = [...doc.querySelectorAll('#cfRows .cfval')].map(i => +i.value);
+if (cfNow2.join(',') !== '1463,1704,2058,2390') { doc.getElementById('cfRows').innerHTML = ''; [1463,1704,2058,2390].forEach(v => dom.window.addCfRow(v)); }
+ok('heat_ev2 渲染 25 个可点击单元', doc.querySelectorAll('#heat_ev2 rect[data-w]').length === 25, 'cells=' + doc.querySelectorAll('#heat_ev2 rect[data-w]').length);
+ok('heat_ev2 当前点(9%/3%)有 ★ 高亮', /★/.test(htmlOf('heat_ev2')));
+ok('heat_ev2 单元值=页面 customEVAt 计算值', (() => { const v=heatCell('heat_ev2',11,2), e=dom.window.customEVAt(11,2); return v!=null && e!=null && Math.abs(v-e) < 0.5; })(), 'v=' + heatCell('heat_ev2',11,2) + ' e=' + dom.window.customEVAt(11,2));
+ok('heat_ev2 同 g₂ 下 WACC 越低 EV 越高', (() => { const a=heatCell('heat_ev2',7,2), b=heatCell('heat_ev2',11,2); return a!=null && b!=null && a > b; })(), '7%=' + heatCell('heat_ev2',7,2) + ' 11%=' + heatCell('heat_ev2',11,2));
+const te2 = doc.querySelector('#heat_ev2 rect[data-w="7"][data-g="2"]');
+te2.dispatchEvent(new dom.window.Event('click', { bubbles: true }));
+ok('点击 heat_ev2(7,2) 回填 c_wacc=7', num(doc.getElementById('c_wacc').value) === 7, doc.getElementById('c_wacc').value);
+ok('点击 heat_ev2(7,2) 回填 c_g2=2', num(doc.getElementById('c_g2').value) === 2, doc.getElementById('c_g2').value);
 setVal('c_wacc', 9); setVal('c_g2', 3); // 还原
 
 console.log(log.join('\n'));
