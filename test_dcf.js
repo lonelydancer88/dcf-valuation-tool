@@ -205,6 +205,15 @@ ok('parseQuote A股 总股本=12.50亿', aQ && Math.abs(aQ.shares - 12.5) < 0.01
 ok('parseQuote 空串→null', dom.window.parseQuote('a', '') === null);
 ok('fetchLive 已定义（无网络环境下不崩溃）', typeof dom.window.fetchLive === 'function');
 
+log.push('— 名称搜索解析 parseHint（纯函数，按名称找代码）—');
+ok('小米 → 港股 hk01810（无A股则取港股）', (() => { const h = dom.window.parseHint('hk~01810~小米集团w~xmjtw~GP^us~xiacf.ps~小米集团~xmjt~GP'); return h && h.code === 'hk01810'; })());
+ok('茅台 → sh600519', (() => { const h = dom.window.parseHint('sh~600519~贵州茅台~gzmt~GP-A'); return h && h.code === 'sh600519'; })());
+ok('美团 → 港股而非美股', (() => { const h = dom.window.parseHint('us~mpngy.ps~美团~mt~GP^hk~03690~美团w~mtw~GP'); return h && h.code === 'hk03690'; })());
+ok('比亚迪(A/H双重) → 取A股 sz002594', (() => { const h = dom.window.parseHint('sz~002594~比亚迪~byd~GP-A^hk~01211~比亚迪股份~bydgf~GP^us~byddy.ps~比亚迪~byd~GP'); return h && h.code === 'sz002594'; })());
+ok('过滤非个股(权证/指数)', dom.window.parseHint('hk~13011~小米信证~xx~QZ^sh~000847~腾讯济安~txja~ZS') === null);
+ok('parseHint 空串 → null', dom.window.parseHint('') === null);
+ok('searchCode 已定义', typeof dom.window.searchCode === 'function');
+
 log.push('— 预设下拉（原生 select，兜底 datalist：Safari 不显示 datalist）—');
 const sel = doc.getElementById('stockPick');
 ok('存在 select#stockPick', !!sel);

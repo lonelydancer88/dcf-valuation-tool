@@ -557,15 +557,28 @@ function parseQuote(mkt,txt){
   if(!(price>0)||!(raw>0)) return null;
   return {name:f[1]||'', code:f[2]||'', price, shares:raw/1e8, mkt}; // shares 单位：亿股
 }
-function jsonpQuote(code,cb){
-  const varName='v_'+code;
+// 通用 JSONP：加载外部脚本并读回它赋值的全局变量（腾讯系接口跨域方式）
+function jsonpVar(varName,url,cb){
   try{ delete window[varName]; }catch(e){ window[varName]=undefined; }
   const s=document.createElement('script');
   s.charset='gbk';
-  s.src='https://qt.gtimg.cn/q='+code+'&_='+Date.now();
+  s.src=url;
   const done=(ok)=>{ try{s.remove();}catch(e){} cb(ok?window[varName]:null); };
   s.onload=()=>done(true); s.onerror=()=>done(false);
   document.head.appendChild(s);
+}
+function jsonpQuote(code,cb){ jsonpVar('v_'+code,'https://qt.gtimg.cn/q='+code+'&_='+Date.now(),cb); }
+// 解析 smartbox 搜索串：市场~代码~名称~拼音~类型（多条用 ^ 分隔），只取个股(GP*)
+// 优先级：沪深京 > 港股 > 其它（美股等）。A+/H 双重上市时取 A 股；纯港股名（腾讯/美团/小米等）自然落到港股
+function parseHint(txt){
+  if(!txt) return null;
+  const items=String(txt).split('^').map(x=>x.split('~')).filter(f=>f.length>=5 && /^GP/i.test(f[4]));
+  if(!items.length) return null;
+  const pick=items.find(f=>['sh','sz','bj'].includes(f[0]))||items.find(f=>f[0]==='hk')||items[0];
+  return {mkt:pick[0], code:pick[0]+pick[1], name:pick[2]};
+}
+function searchCode(q,cb){
+  jsonpVar('v_hint','https://smartbox.gtimg.cn/s3/?q='+encodeURIComponent(q)+'&t=all&_='+Date.now(),txt=>cb(parseHint(txt)));
 }
 function fetchFxLive(cb){
   if(typeof fetch!=='function'){ cb(null); return; } // 无 fetch 环境（如本地测试）直接跳过
@@ -587,10 +600,11 @@ function applyLive(q){
   document.getElementById('showHkd').checked = (q.mkt==='hk'); // 港股→港元口径，A股→人民币口径
   recalcAll();
 }
-function fetchLive(){
-  const code=resolveCode();
-  if(!code){ setLiveMsg('请先输入可识别的代码（如 00700 / 600519 / 0700.HK）','bad'); return; }
+function doLive(code){
   const mkt=/^hk/.test(code)?'hk':'a';
+  // 先按市场把币种口径切好：港股自动勾选「港股模式」，A股自动取消（即使行情稍后取不到也已生效）
+  const box=document.getElementById('showHkd');
+  if(box.checked!==(mkt==='hk')){ box.checked=(mkt==='hk'); recalcAll(); }
   setLiveMsg('正在获取 '+code+' …');
   fetchFxLive(fx=>{
     if(fx) document.getElementById('fx').value=fx;
@@ -603,6 +617,18 @@ function fetchLive(){
     });
   });
 }
+function fetchLive(){
+  const code=resolveCode();
+  if(code){ doLive(code); return; }
+  const raw=document.getElementById('stockName').value.trim();
+  if(!raw){ setLiveMsg('请输入股票名称或代码（如 腾讯 / 00700 / 600519）','bad'); return; }
+  setLiveMsg('正在搜索「'+raw+'」…');
+  searchCode(raw,hit=>{                      // 名称没有直接对应代码时，联网搜索
+    if(!hit){ setLiveMsg('没能识别「'+raw+'」，请直接输入代码（如 00700 / 600519）','bad'); return; }
+    document.getElementById('stockName').value=(hit.name||raw);
+    doLive(hit.code);
+  });
+}
 
 // ---- 初始化 ----
 ['f0','n','g1','g2','wacc','netdebt','shares','price'].forEach(id=>document.getElementById(id).addEventListener('input',recalcStage));
@@ -610,7 +636,11 @@ function fetchLive(){
 ['l_f3','l_shares','l_price'].forEach(id=>document.getElementById(id).addEventListener('input',recalcLaotang));
 document.getElementById('stockName').addEventListener('input',onStockInput);
 document.getElementById('stockName').addEventListener('change',onStockInput);
-document.getElementById('stockName').addEventListener('change',()=>{ if(resolveCode()) fetchLive(); }); // 选定/输入代码后自动实时拉取
+let _lastAutoFetch='';
+document.getElementById('stockName').addEventListener('change',()=>{
+  const v=document.getElementById('stockName').value.trim();
+  if(v && v!==_lastAutoFetch){ _lastAutoFetch=v; fetchLive(); } // 选定名称/代码后自动实时拉取（含按名称联网搜索）
+});
 document.getElementById('stockPick').addEventListener('change',onStockPick);
 // 汇率 / 港元开关：任一改动都重算三个标签
 function recalcAll(){ recalcStage(); recalcCustom(); recalcLaotang(); }
