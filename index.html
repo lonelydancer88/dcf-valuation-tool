@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DCF 估值工具集</title>
+<style>
+  :root{
+    --bg:#f4f6fb; --card:#ffffff; --ink:#1f2733; --muted:#6b7686;
+    --line:#e4e8f0; --brand:#2f6fed; --brand2:#16a085;
+    --good:#16a085; --bad:#e05656; --warn:#e0962f;
+    --shadow:0 2px 10px rgba(31,39,51,.06);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg);color:var(--ink);font-size:14px;line-height:1.5}
+  header{padding:18px 24px;background:linear-gradient(120deg,#2f6fed,#16a085);color:#fff}
+  header h1{margin:0;font-size:20px;font-weight:650}
+  header p{margin:4px 0 0;font-size:12.5px;opacity:.9}
+  .tabs{display:flex;gap:8px;padding:14px 24px 0;flex-wrap:wrap}
+  .tabbtn{border:1px solid var(--line);background:#fff;color:var(--ink);padding:8px 16px;border-radius:9px 9px 0 0;
+    font-size:13.5px;cursor:pointer;font-weight:600;display:inline-block}
+  /* 纯 CSS 标签页：不依赖 JS，脚本被沙箱禁用也能切换 */
+  .tabradio{position:absolute;opacity:0;width:0;height:0;pointer-events:none}
+  #t1:checked ~ .tabs label[for="t1"],
+  #t2:checked ~ .tabs label[for="t2"],
+  #t3:checked ~ .tabs label[for="t3"]{background:var(--brand);color:#fff;border-color:var(--brand)}
+  #t1:checked ~ #panel1,#t2:checked ~ #panel2,#t3:checked ~ #panel3{display:block}
+  .stockbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:12px 24px;background:#fff;
+    border:1px solid var(--line);border-radius:10px;margin:0 18px}
+  .stockbar label{font-size:13px;color:var(--muted);font-weight:600}
+  .stockbar input{padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:14px;width:230px;background:#fbfcfe}
+  .stockbar input:focus{outline:none;border-color:var(--brand)}
+  .stockbar .mini{font-size:11.5px;color:#9aa4b2}
+  .stockbar input.fx{width:96px}
+  .stockbar label.fxchk{display:inline-flex;align-items:center;gap:6px;font-weight:600;cursor:pointer}
+  .stockbar label.fxchk input{width:auto;padding:0;margin:0}
+  .rc.hkd{background:#f2f8f5;border-color:#bfe3d6}
+  .rc.hkd .v{color:#0f6b57}
+  .stockbar .mini.good{color:#0f6b57}
+  .stockbar .mini.bad{color:var(--bad)}
+  .panel{display:none;padding:0 18px 18px}
+  .wrap{display:grid;grid-template-columns:320px 1fr;gap:18px;align-items:start}
+  @media(max-width:880px){.wrap{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;box-shadow:var(--shadow);margin-top:14px}
+  .card h2{margin:0 0 12px;font-size:15px;font-weight:600}
+  .field{margin-bottom:12px}
+  .field label{display:block;font-size:12.5px;color:var(--muted);margin-bottom:4px}
+  .field .hint{font-size:11px;color:#9aa4b2;margin-top:2px}
+  .field input{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:14px;
+    font-variant-numeric:tabular-nums;background:#fbfcfe}
+  .field input:focus{outline:none;border-color:var(--brand);background:#fff}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .err{color:var(--bad);font-size:12px;margin:6px 0;min-height:16px}
+  .assume{font-size:12px;color:var(--muted);background:#f7f9fc;border:1px dashed var(--line);
+    border-radius:8px;padding:8px 10px;margin-bottom:14px}
+  .assume b{color:var(--ink)}
+  .result-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:4px}
+  .rc{border:1px solid var(--line);border-radius:10px;padding:12px;background:#fbfcfe}
+  .rc .k{font-size:12px;color:var(--muted)}
+  .rc .v{font-size:20px;font-weight:650;margin-top:2px;font-variant-numeric:tabular-nums}
+  .rc .sub{font-size:11.5px;color:#9aa4b2;margin-top:2px}
+  .tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;font-weight:600;color:#fff}
+  .tag.good{background:var(--good)} .tag.bad{background:var(--bad)} .tag.warn{background:var(--warn)}
+  table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+  th,td{padding:7px 8px;text-align:right;border-bottom:1px solid var(--line)}
+  th:first-child,td:first-child{text-align:left}
+  thead th{color:var(--muted);font-weight:600;background:#f7f9fc}
+  tbody tr.total{font-weight:650;background:#f7f9fc}
+  .chart-title{font-size:13.5px;font-weight:600;margin:18px 0 8px}
+  .legend{display:flex;gap:16px;font-size:12px;color:var(--muted);margin-top:6px;align-items:center}
+  .legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+  .cfrow{display:grid;grid-template-columns:64px 1fr 30px;gap:6px;align-items:center;margin-bottom:6px}
+  .cfrow .cfidx{font-size:12.5px;color:var(--muted)}
+  .cfrow .cfdel{border:1px solid var(--line);background:#fff;color:var(--bad);border-radius:6px;cursor:pointer;height:32px}
+  .cfrow .cfdel:hover{background:#fdeaea}
+  .btn{display:inline-block;border:1px solid var(--brand);color:var(--brand);background:#fff;border-radius:8px;
+    padding:6px 12px;font-size:12.5px;cursor:pointer;margin:4px 8px 10px 0}
+  .btn:hover{background:#eef3fe}
+  .note{font-size:11.5px;color:#9aa4b2;margin-top:10px;line-height:1.6}
+  details.note2{margin-top:12px;border:1px dashed var(--line);border-radius:8px;background:#f7f9fc;padding:8px 11px}
+  details.note2 summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var(--brand);outline:none;list-style-position:inside}
+  details.note2[open] summary{margin-bottom:8px}
+  details.note2 .nb{font-size:12px;color:var(--muted);line-height:1.75}
+  details.note2 .nb b{color:var(--ink)}
+  details.note2 .nb ul{margin:5px 0 8px;padding-left:18px}
+  details.note2 .nb li{margin:3px 0}
+  details.note2 .nb .key{color:var(--bad);font-weight:600}
+  .ltable td:first-child{font-weight:600}
+  .ltable tbody tr.grp td{background:#eef6f2;color:#0f6b57;font-weight:650;text-align:left;font-size:12px}
+  .foot{font-size:11.5px;color:#9aa4b2;padding:4px 24px 24px}
+</style>
+</head>
+<body>
+<header>
+  <h1>DCF 估值工具集</h1>
+  <p>自定义现金流+永续 · 老唐估值法 · 两阶段固定增长 — 纯本地运算，不上传任何数据</p>
+</header>
+
+<div class="tabwrap">
+  <input class="tabradio" type="radio" name="dcftab" id="t1">
+  <input class="tabradio" type="radio" name="dcftab" id="t2" checked>
+  <input class="tabradio" type="radio" name="dcftab" id="t3">
+<div class="tabs">
+  <label class="tabbtn" for="t2">① 自定义现金流+永续</label>
+  <label class="tabbtn" for="t3">② 老唐估值法</label>
+  <label class="tabbtn" for="t1">③ 两阶段固定增长</label>
+</div>
+
+<!-- ============ 股票速填 ============ -->
+<div class="stockbar">
+  <label>股票名称 / 代码</label>
+  <input id="stockName" list="stockList" placeholder="如 腾讯控股 / 00700 / 600519" autocomplete="off">
+  <datalist id="stockList"></datalist>
+  <button class="btn" type="button" onclick="fetchLive()">⟳ 实时获取</button>
+  <button class="btn" type="button" onclick="savePreset()">存为预设</button>
+  <span class="mini" id="liveMsg"></span>
+  <label>汇率 1 港元 =</label>
+  <input id="fx" class="fx" type="number" step="any" value="0.856">
+  <label>人民币</label>
+  <label class="fxchk" title="勾选后：股价按港元输入/显示，并用港元口径与现价比对"><input id="showHkd" type="checkbox"> 港股模式（股价按港元）</label>
+  <span class="mini">「实时获取」按代码联网取当前汇率、现价与总股本（行情：腾讯 qt.gtimg.cn；汇率：open.er-api.com）；选中内置股票后也会自动拉取。取不到时可手动填示例快照。</span>
+</div>
+
+<!-- ============ 标签1 ============ -->
+<div class="panel" id="panel1">
+  <div class="wrap">
+    <div class="card">
+      <h2>输入参数</h2>
+      <div class="field">
+        <label>基期 FCFF (F₀)</label>
+        <input id="f0" type="number" value="2000" step="any"><div class="hint">示例单位：人民币亿元</div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>高增长期年数 N</label><input id="n" type="number" value="5" step="1" min="1"></div>
+        <div class="field"><label>高增长增长率 g₁</label><input id="g1" type="number" value="12" step="any">%</div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>永续增长率 g₂</label><input id="g2" type="number" value="3" step="any">%</div>
+        <div class="field"><label>WACC 折现率</label><input id="wacc" type="number" value="9" step="any">%</div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>净负债</label><input id="netdebt" type="number" value="0" step="any"><div class="hint">净现金填负值</div></div>
+        <div class="field"><label>流通股数</label><input id="shares" type="number" value="93" step="any"><div class="hint">示例：亿股</div></div>
+      </div>
+      <div class="field"><label>当前股价（可选）</label><input id="price" type="number" value="370" step="any" placeholder="留空不显示安全边际"></div>
+      <details class="note2">
+        <summary>备注：折现率 WACC 与永续增长率 g₂ 怎么取？</summary>
+        <div class="nb">
+          <b>WACC（加权平均资本成本）</b> = E/(D+E)·Ke + D/(D+E)·Kd·(1−税率)
+          <ul>
+            <li>股权成本 Ke 用 CAPM：Ke = 无风险利率 Rf + β × 股权风险溢价 ERP。Rf 取 10 年期国债收益率（中国约 1.7%~2.5%，美国约 4%+）；A 股 ERP 常取 5%~6%；β 按行业（消费/公用事业偏低，周期/科技偏高）。</li>
+            <li>债务成本 Kd 用公司实际借款利率，税后即 ×(1−所得税率)；净现金公司 D≈0，则 WACC≈Ke。</li>
+            <li><b>实务简化</b>：直接给一个"要求回报率"——稳健公司 8%~9%、一般公司 10%、高风险 12%+。老唐用"无风险利率的倒数"当 PE，等价于把折现率锚在 3%~4%，只适用于确定性极高的公司，切勿乱套。</li>
+          </ul>
+          <b>永续增长率 g₂</b>：长期不可能超过名义 GDP 增速。
+          <ul>
+            <li>常用 2%~3%；经验式 g₂ ≈ 长期通胀（约 2%）+ 长期实际增速。消费/公用事业贴近 GDP，强周期公司取 0%~1% 更稳妥。</li>
+            <li>铁律：<span class="key">WACC 必须 &gt; g₂</span>，否则终值发散（本工具会直接报错提示）。</li>
+            <li>别把 g₂ 设成你的乐观预期——它代表的是"永远"的增速。</li>
+          </ul>
+          <b>敏感性</b>：终值通常占企业价值的 60%~80%，每股价值对 WACC 与 g₂ 都极敏感；请用敏感性热力图或多改几组参数交叉验证，不要只信一个点。
+        </div>
+      </details>
+      <div class="err" id="err1"></div>
+    </div>
+    <div>
+      <div class="assume" id="assume1"></div>
+      <div class="result-cards" id="cards1"></div>
+      <div class="card">
+        <h2>逐年折现明细</h2>
+        <table id="detail1"><thead><tr><th>年份</th><th>预测 FCFF</th><th>折现因子</th><th>现值</th><th>累计现值</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div class="card" style="margin-top:18px">
+        <h2>价值构成</h2>
+        <div class="chart-title">各期现值（含终值）</div><div id="bar1"></div>
+        <div class="legend"><span><i style="background:#2f6fed"></i>显式预测期现值</span><span><i style="background:#16a085"></i>终值现值</span></div>
+        <div class="chart-title">显式期 vs 终值 占比</div><div id="donut1"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 标签2 ============ -->
+<div class="panel" id="panel2">
+  <div class="wrap">
+    <div class="card">
+      <h2>逐年自由现金流（可编辑）</h2>
+      <div id="cfRows"></div>
+      <button class="btn" type="button" onclick="addCfRow()">+ 添加一行</button>
+      <div class="field"><label>永续增长率 g₂</label><input id="c_g2" type="number" value="3" step="any">%</div>
+      <div class="row2">
+        <div class="field"><label>WACC 折现率</label><input id="c_wacc" type="number" value="9" step="any">%</div>
+        <div class="field"><label>净负债</label><input id="c_netdebt" type="number" value="0" step="any"></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>流通股数</label><input id="c_shares" type="number" value="93" step="any"></div>
+        <div class="field"><label>当前股价（可选）</label><input id="c_price" type="number" value="370" step="any" placeholder="留空不显示安全边际"></div>
+      </div>
+      <details class="note2">
+        <summary>备注：折现率 WACC 与永续增长率 g₂ 怎么取？</summary>
+        <div class="nb">
+          <b>WACC（加权平均资本成本）</b> = E/(D+E)·Ke + D/(D+E)·Kd·(1−税率)
+          <ul>
+            <li>股权成本 Ke 用 CAPM：Ke = 无风险利率 Rf + β × 股权风险溢价 ERP。Rf 取 10 年期国债收益率（中国约 1.7%~2.5%，美国约 4%+）；A 股 ERP 常取 5%~6%；β 按行业（消费/公用事业偏低，周期/科技偏高）。</li>
+            <li>债务成本 Kd 用公司实际借款利率，税后即 ×(1−所得税率)；净现金公司 D≈0，则 WACC≈Ke。</li>
+            <li><b>实务简化</b>：直接给一个"要求回报率"——稳健公司 8%~9%、一般公司 10%、高风险 12%+。老唐用"无风险利率的倒数"当 PE，等价于把折现率锚在 3%~4%，只适用于确定性极高的公司，切勿乱套。</li>
+          </ul>
+          <b>永续增长率 g₂</b>：长期不可能超过名义 GDP 增速。
+          <ul>
+            <li>常用 2%~3%；经验式 g₂ ≈ 长期通胀（约 2%）+ 长期实际增速。消费/公用事业贴近 GDP，强周期公司取 0%~1% 更稳妥。</li>
+            <li>铁律：<span class="key">WACC 必须 &gt; g₂</span>，否则终值发散（本工具会直接报错提示）。</li>
+            <li>别把 g₂ 设成你的乐观预期——它代表的是"永远"的增速。</li>
+          </ul>
+          <b>敏感性</b>：终值通常占企业价值的 60%~80%，每股价值对 WACC 与 g₂ 都极敏感；请用敏感性热力图或多改几组参数交叉验证，不要只信一个点。
+        </div>
+      </details>
+      <div class="err" id="err2"></div>
+    </div>
+    <div>
+      <div class="assume" id="assume2"></div>
+      <div class="result-cards" id="cards2"></div>
+      <div class="card">
+        <h2>逐年折现明细</h2>
+        <table id="detail2"><thead><tr><th>期次</th><th>预测 FCFF</th><th>折现因子</th><th>现值</th><th>累计现值</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div class="card" style="margin-top:18px">
+        <h2>价值构成</h2>
+        <div class="chart-title">各期现值（含终值）</div><div id="bar2"></div>
+        <div class="legend"><span><i style="background:#2f6fed"></i>显式预测期现值</span><span><i style="background:#16a085"></i>终值现值</span></div>
+        <div class="chart-title">显式期 vs 终值 占比</div><div id="donut2"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 标签3 ============ -->
+<div class="panel" id="panel3">
+  <div class="wrap">
+    <div class="card">
+      <h2>老唐估值法参数</h2>
+      <div class="field">
+        <label>第三年自由现金流（F3）</label>
+        <input id="l_f3" type="number" value="2000" step="any"><div class="hint">老唐原版用净利润，此处按你的口径用自由现金流</div>
+      </div>
+      <div class="field"><label>合理 PE 档</label>
+        <div style="font-size:13px;color:var(--ink);padding:6px 0">固定两档对照：<b>25</b> / <b>30</b></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>流通股数（可选）</label><input id="l_shares" type="number" value="93" step="any"><div class="hint">折每股买/卖点</div></div>
+        <div class="field"><label>当前股价（可选）</label><input id="l_price" type="number" value="370" step="any" placeholder="留空不显示状态"></div>
+      </div>
+      <div class="err" id="err3"></div>
+    </div>
+    <div>
+      <div class="assume" id="assume3"></div>
+      <div class="result-cards" id="cards3"></div>
+      <div class="card">
+        <h2>两档对照（买点=估值×50%，卖点=估值×150%）</h2>
+        <table class="ltable" id="ltable">
+          <thead><tr><th>项目</th><th>PE = 25</th><th>PE = 30</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div class="note">币种：表中金额默认<b>人民币</b>（按 F3 的计价币种）；开启「港股模式」后，表末再附一组<b>港元</b>换算行（按上方汇率换算）。
+          买点参考线取 PE25（保守），卖点参考线取 PE30（乐观）；状态按当前市值落在 [PE25买点, PE30卖点] 区间判定。
+          老唐附加规则：当年动态 PE ≥ 50 倍时即便未到卖点也应卖。<br>
+          三大前提（适用条件）：利润为真、利润可持续、维持当前盈利能力无需大量新增资本投入。</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /tabwrap -->
+<div class="foot">注：本工具为估值测算辅助，所有参数需使用者自行判断与替换，不构成任何投资建议。</div>
+
+<script>
+const fmt=(x,d=0)=> (isFinite(x)? x.toLocaleString('zh-CN',{maximumFractionDigits:d,minimumFractionDigits:d}):'—');
+const readNum=id=>{const v=document.getElementById(id).value; return v===''? null : +v;};
+// ---- 港元换算（仅展示；FCFF/净负债/股价仍按报告货币填）----
+const readFx=()=>{const v=readNum('fx'); return (v!=null && v>0)? v : null;};   // 1 港元 = ? 人民币
+const hkdMode=()=>{const el=document.getElementById('showHkd'); return !!(el&&el.checked);};
+function hkdCards(res){
+  if(!hkdMode()) return '';
+  const fx=readFx(); if(!fx) return '';
+  const c=v=>v/fx;
+  return `<div class="rc hkd"><div class="k">企业价值 EV（港元）</div><div class="v">${fmt(c(res.ev))}</div><div class="sub">按 1 港元 = ${fx} 人民币</div></div>
+    <div class="rc hkd"><div class="k">股权价值（港元）</div><div class="v">${fmt(c(res.equity))}</div></div>
+    <div class="rc hkd"><div class="k">每股内在价值（港元）</div><div class="v">${fmt(c(res.perShare),1)}</div></div>`;
+}
+
+// 标签切换现在由 CSS（radio + :checked）完成，脚本被禁用也能用。
+// 保留此函数仅供程序化调用（如外部脚本切到某标签）。
+function showTab(idx){ const r=document.getElementById('t'+idx); if(r) r.checked=true; }
+
+// ---- 共享 SVG 渲染 ----
+function renderBar(el, data){
+  const W=520,H=200,padL=10,padB=24,padT=10;
+  const max=Math.max(...data.map(d=>d.val));
+  const gap=(W-padL*2)/data.length, bw=gap*0.62;
+  let s=`<svg viewBox="0 0 ${W} ${H+padB}" width="100%" style="max-width:${W}px">`;
+  s+=`<line x1="${padL}" y1="${H-padB}" x2="${W-padL}" y2="${H-padB}" stroke="#e4e8f0"/>`;
+  data.forEach((d,i)=>{
+    const h=d.val/max*(H-padB-padT), x=padL+gap*i+(gap-bw)/2, y=H-padB-h;
+    s+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${d.color}"/>`;
+    s+=`<text x="${(x+bw/2).toFixed(1)}" y="${(y-4).toFixed(1)}" font-size="10" text-anchor="middle" fill="#6b7686">${fmt(d.val)}</text>`;
+    s+=`<text x="${(x+bw/2).toFixed(1)}" y="${(H-padB+14).toFixed(1)}" font-size="10.5" text-anchor="middle" fill="#1f2733">${d.label}</text>`;
+  });
+  s+=`</svg>`; el.innerHTML=s;
+}
+function renderDonut(el,a,b){
+  const total=a+b, aP=a/total, bP=b/total, cx=70,cy=70,R=58;
+  const C=2*Math.PI*R, aLen=C*aP, bLen=C*bP;
+  let s=`<svg viewBox="0 0 320 140" width="100%" style="max-width:340px">`;
+  s+=`<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="#2f6fed" stroke-width="22" stroke-dasharray="${aLen} ${C-aLen}" transform="rotate(-90 ${cx} ${cy})"/>`;
+  s+=`<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="#16a085" stroke-width="22" stroke-dasharray="${bLen} ${C-bLen}" stroke-dashoffset="${-aLen}" transform="rotate(-90 ${cx} ${cy})"/>`;
+  s+=`<text x="${cx}" y="${cy-4}" font-size="13" text-anchor="middle" fill="#1f2733" font-weight="650">${(bP*100).toFixed(1)}%</text>`;
+  s+=`<text x="${cx}" y="${cy+13}" font-size="10.5" text-anchor="middle" fill="#6b7686">终值占比</text>`;
+  s+=`<text x="160" y="58" font-size="12" fill="#2f6fed">■ 显式期 ${(aP*100).toFixed(1)}% (${fmt(a)})</text>`;
+  s+=`<text x="160" y="80" font-size="12" fill="#16a085">■ 终值 ${(bP*100).toFixed(1)}% (${fmt(b)})</text>`;
+  s+=`</svg>`; el.innerHTML=s;
+}
+function renderResults(els,res){
+  if(res.error){els.err.textContent=res.error;els.cards.innerHTML='';els.tbody.innerHTML='';els.bar.innerHTML='';els.donut.innerHTML='';return;}
+  els.err.textContent='';
+  let html=`<div class="rc"><div class="k">企业价值 EV</div><div class="v">${fmt(res.ev)}</div></div>
+    <div class="rc"><div class="k">股权价值</div><div class="v">${fmt(res.equity)}</div></div>
+    <div class="rc"><div class="k">每股内在价值</div><div class="v">${fmt(res.perShare,1)}</div></div>`;
+  if(res.upside!=null){
+    const up=res.upside, cls=up>=0?'good':'bad';
+    html+=`<div class="rc"><div class="k">相对现价安全边际</div><div class="v">${(up>=0?'+':'')}${(up*100).toFixed(1)}%</div>
+      <div class="sub"><span class="tag ${cls}">${up>=0?'低估':'高估'}</span> 现价 ${fmt(res.price)}（${res.cur}）</div></div>`;
+  }
+  els.cards.innerHTML=html+hkdCards(res);
+  let t='';
+  res.rows.forEach(r=>{t+=`<tr><td>第 ${r.t} 期</td><td>${fmt(r.fcff)}</td><td>${r.df.toFixed(4)}</td><td>${fmt(r.pv)}</td><td>${fmt(r.cum)}</td></tr>`;});
+  t+=`<tr class="total"><td>终值(第 ${res.rows.length} 期末)</td><td>${fmt(res.fN)}</td><td>${(1/Math.pow(1+res.wacc,res.rows.length)).toFixed(4)}</td><td>${fmt(res.pvTV)}</td><td>${fmt(res.ev)}</td></tr>`;
+  els.tbody.innerHTML=t;
+  const data=res.rows.map(x=>({label:'Y'+x.t,val:x.pv,color:'#2f6fed'})).concat([{label:'终值',val:res.pvTV,color:'#16a085'}]);
+  renderBar(els.bar,data); renderDonut(els.donut,res.explicitPV,res.pvTV);
+}
+
+// ---- 标签1：两阶段固定增长 ----
+function computeStage(){
+  const f0=readNum('f0'), n=Math.max(1,Math.round(readNum('n')||0));
+  const g1=(readNum('g1')||0)/100, g2=(readNum('g2')||0)/100, wacc=(readNum('wacc')||0)/100;
+  const netdebt=readNum('netdebt')||0, shares=readNum('shares')||0, price=readNum('price');
+  if(!(wacc>g2)) return {error:'WACC 必须 > 永续增长率 g₂，否则终值发散（趋于无穷）。请调高 WACC 或调低 g₂。'};
+  if(!(f0>0)||!(shares>0)) return {error:'基期 FCFF 与流通股数必须为正数。'};
+  const rows=[]; let cum=0, explicitPV=0;
+  for(let t=1;t<=n;t++){const fcff=f0*Math.pow(1+g1,t), df=1/Math.pow(1+wacc,t), pv=fcff*df; cum+=pv; explicitPV+=pv; rows.push({t,fcff,df,pv,cum});}
+  const fN=f0*Math.pow(1+g1,n), tv=fN*(1+g2)/(wacc-g2), pvTV=tv/Math.pow(1+wacc,n);
+  const ev=explicitPV+pvTV, equity=ev-netdebt, perShare=equity/shares;
+  const fx=readFx(), hkd=hkdMode()&&fx, cmpPer=perShare/(hkd?fx:1); // 比较口径与股价同币种
+  const upside=(price!=null&&price>0)?(cmpPer-price)/price:null;
+  return {rows,fN,pvTV,explicitPV,ev,equity,perShare,cmpPer,cur:hkd?'港元':'人民币',upside,price,wacc};
+}
+function recalcStage(){
+  const p={f0:readNum('f0'),n:readNum('n'),g1:readNum('g1'),g2:readNum('g2'),wacc:readNum('wacc'),netdebt:readNum('netdebt'),shares:readNum('shares'),price:readNum('price')};
+  document.getElementById('assume1').innerHTML=
+    `假设速览：F₀=<b>${fmt(p.f0)}</b> · N=<b>${p.n}</b>年 · g₁=<b>${p.g1}%</b> · g₂=<b>${p.g2}%</b> · WACC=<b>${p.wacc}%</b> · 净负债=<b>${fmt(p.netdebt)}</b> · 股数=<b>${fmt(p.shares)}</b>`+(p.price!=null?` · 现价=<b>${fmt(p.price)}</b>`:'');
+  renderResults({err:document.getElementById('err1'),cards:document.getElementById('cards1'),tbody:document.querySelector('#detail1 tbody'),bar:document.getElementById('bar1'),donut:document.getElementById('donut1')}, computeStage());
+}
+
+// ---- 标签2：自定义现金流 + 永续 ----
+function addCfRow(val){
+  const cont=document.getElementById('cfRows');
+  const row=document.createElement('div'); row.className='cfrow';
+  row.innerHTML=`<span class="cfidx"></span><input class="cfval" type="number" step="any" value="${val!=null?val:''}" placeholder="该期 FCFF"><button class="cfdel" type="button">×</button>`;
+  row.querySelector('.cfdel').onclick=()=>{ if(cont.children.length>1){row.remove();renumberCf();recalcCustom();} };
+  row.querySelector('.cfval').addEventListener('input',recalcCustom);
+  cont.appendChild(row); renumberCf(); recalcCustom();
+}
+function renumberCf(){document.querySelectorAll('#cfRows .cfrow').forEach((r,i)=>{r.querySelector('.cfidx').textContent='第 '+(i+1)+' 期';});}
+function computeCustom(){
+  const flows=[]; document.querySelectorAll('#cfRows .cfval').forEach(inp=>{const v=+inp.value; flows.push(isFinite(v)?v:0);});
+  const g2=(readNum('c_g2')||0)/100, wacc=(readNum('c_wacc')||0)/100, netdebt=readNum('c_netdebt')||0, shares=readNum('c_shares')||0, price=readNum('c_price');
+  if(!(wacc>g2)) return {error:'WACC 必须 > 永续增长率 g₂，否则终值发散。'};
+  if(flows.length===0||flows.every(f=>!(f>0))||!(shares>0)) return {error:'至少填一期正现金流，且流通股数须为正数。'};
+  const rows=[]; let cum=0, explicitPV=0;
+  for(let t=1;t<=flows.length;t++){const fcff=flows[t-1], df=1/Math.pow(1+wacc,t), pv=fcff*df; cum+=pv; explicitPV+=pv; rows.push({t,fcff,df,pv,cum});}
+  const fN=flows[flows.length-1], tv=fN*(1+g2)/(wacc-g2), pvTV=tv/Math.pow(1+wacc,flows.length);
+  const ev=explicitPV+pvTV, equity=ev-netdebt, perShare=equity/shares;
+  const fx=readFx(), hkd=hkdMode()&&fx, cmpPer=perShare/(hkd?fx:1);
+  const upside=(price!=null&&price>0)?(cmpPer-price)/price:null;
+  return {rows,fN,pvTV,explicitPV,ev,equity,perShare,cmpPer,cur:hkd?'港元':'人民币',upside,price,wacc};
+}
+function recalcCustom(){
+  const g2=readNum('c_g2'), wacc=readNum('c_wacc'), netdebt=readNum('c_netdebt'), shares=readNum('c_shares'), price=readNum('c_price');
+  document.getElementById('assume2').innerHTML=
+    `假设速览：共 <b>${document.querySelectorAll('#cfRows .cfval').length}</b> 期 · g₂=<b>${g2}%</b> · WACC=<b>${wacc}%</b> · 净负债=<b>${fmt(netdebt)}</b> · 股数=<b>${fmt(shares)}</b>`+(price!=null?` · 现价=<b>${fmt(price)}</b>`:'');
+  renderResults({err:document.getElementById('err2'),cards:document.getElementById('cards2'),tbody:document.querySelector('#detail2 tbody'),bar:document.getElementById('bar2'),donut:document.getElementById('donut2')}, computeCustom());
+}
+
+// ---- 标签3：老唐估值法 ----
+function computeLaotang(){
+  const f3=readNum('l_f3'), shares=readNum('l_shares')||0, price=readNum('l_price');
+  if(!(f3>0)) return {error:'请填写第三年自由现金流（正数）。'};
+  const res=[25,30].map(pe=>{const val=f3*pe; return {pe,val,buy:val*0.5,sell:val*1.5,buySh:shares>0?val*0.5/shares:null,sellSh:shares>0?val*1.5/shares:null};});
+  const curCap=(price!=null&&shares>0)?price*shares:null;
+  return {res,curCap,price,shares};
+}
+function recalcLaotang(){
+  const f3=readNum('l_f3'), shares=readNum('l_shares'), price=readNum('l_price');
+  document.getElementById('assume3').innerHTML=`假设速览：F3=<b>${fmt(f3)}</b> · PE 档=<b>25 / 30</b>`+(shares?` · 股数=<b>${fmt(shares)}</b>`:'')+(price!=null?` · 现价=<b>${fmt(price)}</b>`:'');
+  const r=computeLaotang();
+  const cards=document.getElementById('cards3'), tb=document.querySelector('#ltable tbody');
+  if(r.error){document.getElementById('err3').textContent=r.error; cards.innerHTML=''; tb.innerHTML=''; return;}
+  document.getElementById('err3').textContent='';
+  // 状态卡片
+  let html='';
+  if(r.curCap!=null){
+    const fx=readFx(), hkd=hkdMode()&&fx, adj=hkd?fx:1, unit=hkd?'港元':'人民币';
+    const buyLine=r.res[0].buy/adj, sellLine=r.res[1].sell/adj; // 换算到与股价同币种再比
+    let cls,label;
+    if(r.curCap<buyLine){cls='good';label='低估（可买）';}
+    else if(r.curCap>sellLine){cls='bad';label='高估（可卖）';}
+    else{cls='warn';label='持有区';}
+    html+=`<div class="rc"><div class="k">当前市值</div><div class="v">${fmt(r.curCap)}</div><div class="sub">现价 ${fmt(r.price)} × ${fmt(r.shares,2)} 亿股（${unit}）</div></div>`;
+    html+=`<div class="rc"><div class="k">相对买/卖点</div><div class="v" style="font-size:17px"><span class="tag ${cls}">${label}</span></div>
+      <div class="sub">买线 ${fmt(buyLine)} / 卖线 ${fmt(sellLine)}（${unit}）</div></div>`;
+  }else{
+    const fx2=readFx(), hkd2=hkdMode()&&fx2, adj2=hkd2?fx2:1, unit2=hkd2?'港元':'人民币';
+    html+=`<div class="rc"><div class="k">买点参考线(PE25)</div><div class="v">${fmt(r.res[0].buy/adj2)}</div><div class="sub">${unit2}</div></div>
+      <div class="rc"><div class="k">卖点参考线(PE30)</div><div class="v">${fmt(r.res[1].sell/adj2)}</div><div class="sub">${unit2}</div></div>`;
+  }
+  // 港元换算卡片（与另两个标签一致，醒目展示折算结果）
+  if(hkdMode()){
+    const fx3=readFx();
+    if(fx3){
+      const c=v=>v/fx3;
+      html+=`<div class="rc hkd"><div class="k">三年后合理估值（港元）</div><div class="v" style="font-size:17px">${fmt(c(r.res[0].val))} / ${fmt(c(r.res[1].val))}</div><div class="sub">PE25 / PE30</div></div>
+        <div class="rc hkd"><div class="k">理想买点（港元）</div><div class="v" style="font-size:17px">${fmt(c(r.res[0].buy))} / ${fmt(c(r.res[1].buy))}</div><div class="sub">合理估值 ×50%</div></div>
+        <div class="rc hkd"><div class="k">一年内卖点（港元）</div><div class="v" style="font-size:17px">${fmt(c(r.res[0].sell))} / ${fmt(c(r.res[1].sell))}</div><div class="sub">合理估值 ×150%</div></div>`;
+    }
+  }
+  cards.innerHTML=html;
+  // 对照表
+  const row=(k,a,b)=>`<tr><td>${k}</td><td>${a}</td><td>${b}</td></tr>`;
+  let rows=
+    `<tr class="grp"><td colspan="3">估值结果（人民币，按 F3 计价）</td></tr>`+
+    row('合理 PE', r.res[0].pe, r.res[1].pe)+
+    row('三年后合理估值（人民币）', fmt(r.res[0].val), fmt(r.res[1].val))+
+    row('理想买点（人民币）', fmt(r.res[0].buy), fmt(r.res[1].buy))+
+    row('一年内卖点（人民币）', fmt(r.res[0].sell), fmt(r.res[1].sell))+
+    (r.res[0].buySh!=null? row('每股买点（人民币）', fmt(r.res[0].buySh,1), fmt(r.res[1].buySh,1)):'')+
+    (r.res[0].sellSh!=null? row('每股卖点（人民币）', fmt(r.res[0].sellSh,1), fmt(r.res[1].sellSh,1)):'');
+  const fx=readFx();
+  if(hkdMode()&&fx){
+    const c=v=>v/fx;
+    rows+=
+      `<tr class="grp"><td colspan="3">港元换算（1 港元 = ${fx} 人民币）</td></tr>`+
+      row('三年后合理估值（港元）', fmt(c(r.res[0].val)), fmt(c(r.res[1].val)))+
+      row('理想买点（港元）', fmt(c(r.res[0].buy)), fmt(c(r.res[1].buy)))+
+      row('一年内卖点（港元）', fmt(c(r.res[0].sell)), fmt(c(r.res[1].sell)))+
+      (r.res[0].buySh!=null? row('每股买点（港元）', fmt(c(r.res[0].buySh),1), fmt(c(r.res[1].buySh),1)):'')+
+      (r.res[0].sellSh!=null? row('每股卖点（港元）', fmt(c(r.res[0].sellSh),1), fmt(c(r.res[1].sellSh),1)):'');
+  }
+  tb.innerHTML=rows;
+}
+
+// ---- 股票速填 ----
+const STOCKS={}; const ALIAS={};
+// [名称, 代码, 股数(亿股), 当前股价(与FCFF同币种,示例快照)]
+[['腾讯控股','0700.HK',90.95,426],['贵州茅台','600519',12.50,1267],['五粮液','000858',38.82,69],
+ ['泸州老窖','000568',14.72,130],['伊利股份','600887',63.7,28],['美的集团','000333',76.5,75],
+ ['中国神华','601088',198.7,40],['海康威视','002415',92.3,30],['比亚迪','002594',29.1,110],
+ ['赛轮轮胎','601058',32.8,14]].forEach(([name,code,sh,pr])=>{ STOCKS[name]={code,sh,pr}; ALIAS[code]=name; });
+
+function lookupStock(v){ return STOCKS[v] || STOCKS[ALIAS[v]]; }
+function refreshStockList(){
+  const dl=document.getElementById('stockList');
+  dl.innerHTML=Object.keys(STOCKS).map(name=>{
+    const o=STOCKS[name];
+    let s=`<option value="${name}">${o.code||''}</option>`;
+    if(o.code) s+=`<option value="${o.code}">${name}</option>`;
+    return s;
+  }).join('');
+}
+function applyStock(key){
+  const s=lookupStock(key); if(!s) return false;
+  ['shares','c_shares','l_shares'].forEach(id=>{const el=document.getElementById(id); if(el) el.value=s.sh;});
+  ['price','c_price','l_price'].forEach(id=>{const el=document.getElementById(id); if(el) el.value=s.pr;});
+  document.getElementById('showHkd').checked = !!(s.code && /\.HK$/i.test(s.code)); // 港股→港元口径，A股→人民币口径
+  recalcStage(); recalcCustom(); recalcLaotang();
+  return true;
+}
+function onStockInput(){
+  const v=document.getElementById('stockName').value.trim();
+  const s=lookupStock(v);
+  if(s){ applyStock(v); return; }
+  // 手输/粘贴代码（不在预设名里）也据代码判定币种口径：hk→港元，沪深→人民币
+  const c=normCode(v);
+  if(c){
+    const want=/^hk/.test(c);
+    const box=document.getElementById('showHkd');
+    if(box.checked!==want){ box.checked=want; recalcAll(); }
+  }
+}
+function savePreset(){
+  const name=document.getElementById('stockName').value.trim();
+  if(!name){ alert('请先输入股票名称'); return; }
+  const sh=readNum('shares'), pr=readNum('price');
+  if(!(sh>0)){ alert('请先在「标签① 两阶段」填好股数后再存为预设'); return; }
+  STOCKS[name]={code:'',sh, pr:pr||0};
+  refreshStockList(); document.getElementById('stockName').value=name;
+}
+
+// ---- 实时数据：汇率（er-api，CORS）+ 行情/总股本（腾讯 qt.gtimg.cn，JSONP）----
+function setLiveMsg(t,cls){const el=document.getElementById('liveMsg'); if(!el)return; el.textContent=t||''; el.className='mini'+(cls?(' '+cls):'');}
+// 把用户输入/预设代码规范成腾讯代码：hk00700 / sh600519 / sz000858
+function normCode(raw){
+  let v=String(raw||'').trim().toUpperCase().replace(/\s/g,'');
+  if(!v) return null;
+  let m;
+  if(m=v.match(/^(SH|SZ|BJ|HK)(\d{5,6})$/)) return m[1].toLowerCase()+m[2];
+  if(m=v.match(/^(\d{1,5})\.HK$/)) return 'hk'+m[1].padStart(5,'0');
+  if(m=v.match(/^HK(\d{1,5})$/)) return 'hk'+m[1].padStart(5,'0');
+  if(/^\d{5}$/.test(v)) return 'hk'+v;                    // 5 位 → 港股
+  if(/^\d{6}$/.test(v)){                                   // 6 位 → A 股
+    const c=v[0];
+    if(c==='6') return 'sh'+v;
+    if(c==='0'||c==='3') return 'sz'+v;
+    if(c==='4'||c==='8') return 'bj'+v;
+    return 'sz'+v;
+  }
+  return null;
+}
+// 解析腾讯行情串：现价 [3]；总股本 港股[69] / A股[72]（原始股数）
+function parseQuote(mkt,txt){
+  const f=String(txt||'').split('~');
+  if(f.length<20) return null;
+  const price=+f[3];
+  const raw=(mkt==='hk')? +f[69] : +f[72];
+  if(!(price>0)||!(raw>0)) return null;
+  return {name:f[1]||'', code:f[2]||'', price, shares:raw/1e8, mkt}; // shares 单位：亿股
+}
+function jsonpQuote(code,cb){
+  const varName='v_'+code;
+  try{ delete window[varName]; }catch(e){ window[varName]=undefined; }
+  const s=document.createElement('script');
+  s.charset='gbk';
+  s.src='https://qt.gtimg.cn/q='+code+'&_='+Date.now();
+  const done=(ok)=>{ try{s.remove();}catch(e){} cb(ok?window[varName]:null); };
+  s.onload=()=>done(true); s.onerror=()=>done(false);
+  document.head.appendChild(s);
+}
+function fetchFxLive(cb){
+  if(typeof fetch!=='function'){ cb(null); return; } // 无 fetch 环境（如本地测试）直接跳过
+  try{
+    fetch('https://open.er-api.com/v6/latest/HKD',{cache:'no-store'})
+      .then(r=>r.json())
+      .then(j=>{ const v=j&&j.rates&&+j.rates.CNY; cb(v>0?+v.toFixed(4):null); })
+      .catch(()=>cb(null));
+  }catch(e){ cb(null); }
+}
+function resolveCode(){
+  const v=document.getElementById('stockName').value.trim();
+  const s=lookupStock(v);
+  return normCode((s&&s.code)||v);
+}
+function applyLive(q){
+  ['shares','c_shares','l_shares'].forEach(id=>{const el=document.getElementById(id); if(el) el.value=+q.shares.toFixed(4);});
+  ['price','c_price','l_price'].forEach(id=>{const el=document.getElementById(id); if(el) el.value=q.price;});
+  document.getElementById('showHkd').checked = (q.mkt==='hk'); // 港股→港元口径，A股→人民币口径
+  recalcAll();
+}
+function fetchLive(){
+  const code=resolveCode();
+  if(!code){ setLiveMsg('请先输入可识别的代码（如 00700 / 600519 / 0700.HK）','bad'); return; }
+  const mkt=/^hk/.test(code)?'hk':'a';
+  setLiveMsg('正在获取 '+code+' …');
+  fetchFxLive(fx=>{
+    if(fx) document.getElementById('fx').value=fx;
+    jsonpQuote(code,txt=>{
+      const q=parseQuote(mkt,txt);
+      if(!q){ setLiveMsg('行情获取失败（'+code+'），请检查代码/网络，或手动填数','bad'); if(fx) recalcAll(); return; }
+      applyLive(q);
+      setLiveMsg('已更新：'+(q.name||code)+' 现价 '+q.price.toFixed(2)+(q.mkt==='hk'?' HKD':' CNY')
+        +' · 总股本 '+q.shares.toFixed(2)+' 亿股'+(fx?(' · 汇率 '+fx):'（汇率未取到，沿用当前值）'),'good');
+    });
+  });
+}
+
+// ---- 初始化 ----
+['f0','n','g1','g2','wacc','netdebt','shares','price'].forEach(id=>document.getElementById(id).addEventListener('input',recalcStage));
+['c_g2','c_wacc','c_netdebt','c_shares','c_price'].forEach(id=>document.getElementById(id).addEventListener('input',recalcCustom));
+['l_f3','l_shares','l_price'].forEach(id=>document.getElementById(id).addEventListener('input',recalcLaotang));
+document.getElementById('stockName').addEventListener('input',onStockInput);
+document.getElementById('stockName').addEventListener('change',onStockInput);
+document.getElementById('stockName').addEventListener('change',()=>{ if(resolveCode()) fetchLive(); }); // 选定/输入代码后自动实时拉取
+// 汇率 / 港元开关：任一改动都重算三个标签
+function recalcAll(){ recalcStage(); recalcCustom(); recalcLaotang(); }
+document.getElementById('fx').addEventListener('input',recalcAll);
+document.getElementById('showHkd').addEventListener('change',recalcAll);
+// 自定义现金流标签默认预填四期示例
+[1463,1704,2058,2390].forEach(v=>addCfRow(v));
+refreshStockList();
+recalcStage(); recalcCustom(); recalcLaotang();
+showTab(2); // 默认显示首个标签：① 自定义现金流+永续
+</script>
+</body>
+</html>
