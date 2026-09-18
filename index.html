@@ -527,18 +527,26 @@ function recalcLaotang(){
   let html='';
   if(r.curCap!=null){
     const fx=readFx(), hkd=hkdMode()&&fx, adj=hkd?fx:1, unit=hkd?'港元':'人民币';
-    const buyLine=r.buySrc.buy/adj, sellLine=r.sellSrc.sell/adj; // 低PE档买点 / 高PE档卖点，换算到与股价同币种再比
+    const buyLine=r.buySrc.buy/adj, sellLine=r.sellSrc.sell/adj; // 低PE档买点 / 高PE档卖点（市值口径，用于状态判定）
+    const buyShLine=r.buySrc.buySh/adj, sellShLine=r.sellSrc.sellSh/adj; // 换算成每股股价（与现价同币种）
     let cls,label;
     if(r.curCap<buyLine){cls='good';label='低估（可买）';}
     else if(r.curCap>sellLine){cls='bad';label='高估（可卖）';}
     else{cls='warn';label='持有区';}
     html+=`<div class="rc"><div class="k">当前市值</div><div class="v">${fmt(r.curCap)}</div><div class="sub">现价 ${fmt(r.price)} × ${fmt(r.shares,2)} 亿股（${unit}）</div></div>`;
-    html+=`<div class="rc"><div class="k">相对买/卖点</div><div class="v" style="font-size:17px"><span class="tag ${cls}">${label}</span></div>
-      <div class="sub">买线 ${fmt(buyLine)} / 卖线 ${fmt(sellLine)}（${unit}）</div></div>`;
+    html+=`<div class="rc"><div class="k">相对买/卖点（股价）</div><div class="v" style="font-size:17px"><span class="tag ${cls}">${label}</span></div>
+      <div class="sub">买点 ${fmt(buyShLine,1)} / 现价 ${fmt(r.price)} / 卖点 ${fmt(sellShLine,1)}（${unit}）</div>
+      <div class="sub">对应市值 买线 ${fmt(buyLine)} / 卖线 ${fmt(sellLine)}（${unit}）</div></div>`;
   }else{
     const fx2=readFx(), hkd2=hkdMode()&&fx2, adj2=hkd2?fx2:1, unit2=hkd2?'港元':'人民币';
-    html+=`<div class="rc"><div class="k">买点参考线(PE${r.buySrc.pe})</div><div class="v">${fmt(r.buySrc.buy/adj2)}</div><div class="sub">${unit2}</div></div>
-      <div class="rc"><div class="k">卖点参考线(PE${r.sellSrc.pe})</div><div class="v">${fmt(r.sellSrc.sell/adj2)}</div><div class="sub">${unit2}</div></div>`;
+    const bs=r.buySrc.buySh, ss=r.sellSrc.sellSh;
+    if(bs!=null&&ss!=null){
+      html+=`<div class="rc"><div class="k">买点股价(PE${r.buySrc.pe})</div><div class="v">${fmt(bs/adj2,1)}</div><div class="sub">${unit2} · 对应市值 ${fmt(r.buySrc.buy/adj2)}</div></div>
+        <div class="rc"><div class="k">卖点股价(PE${r.sellSrc.pe})</div><div class="v">${fmt(ss/adj2,1)}</div><div class="sub">${unit2} · 对应市值 ${fmt(r.sellSrc.sell/adj2)}</div></div>`;
+    }else{
+      html+=`<div class="rc"><div class="k">买点参考线(PE${r.buySrc.pe})</div><div class="v">${fmt(r.buySrc.buy/adj2)}</div><div class="sub">${unit2}</div></div>
+        <div class="rc"><div class="k">卖点参考线(PE${r.sellSrc.pe})</div><div class="v">${fmt(r.sellSrc.sell/adj2)}</div><div class="sub">${unit2}</div></div>`;
+    }
   }
   // 港元换算卡片（与另两个标签一致，醒目展示折算结果）
   if(hkdMode()){

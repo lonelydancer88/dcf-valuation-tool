@@ -55,6 +55,11 @@ ok('PE30 每股卖≈967.7', Math.abs(num(lrows[5].split('|')[1]) - 967.7) < 0.5
 ok('当前市值=34410', /34,410/.test(htmlOf('cards3')), '匹配到: ' + (htmlOf('cards3').match(/[\d,]+/) || ['无'])[0]);
 // 34410 ∈ [25000,90000] → 持有区
 ok('状态判定为「持有区」', /持有区/.test(htmlOf('cards3')), '未命中持有区');
+// 相对买/卖点换算成股价：PE25买=25000/93=268.8、PE30卖=90000/93=967.7，现价 370
+ok('相对买/卖点卡换算成股价(买点≈268.8)', /268\.8/.test(htmlOf('cards3')), (htmlOf('cards3').match(/买点 [\d.,]+/) || ['无'])[0]);
+ok('相对买/卖点卡换算成股价(卖点≈967.7)', /967\.7/.test(htmlOf('cards3')), (htmlOf('cards3').match(/卖点 [\d.,]+/) || ['无'])[0]);
+ok('相对买/卖点卡含现价 370（同币种比较）', /现价 370/.test(htmlOf('cards3')));
+ok('相对买/卖点卡仍保留市值口径买线/卖线', /买线 25,000/.test(htmlOf('cards3')) && /卖线 90,000/.test(htmlOf('cards3')));
 
 log.push('— 股票速填（改成贵州茅台 600519 → 股数12.5 股价1267）—');
 setVal('stockName', '贵州茅台');
@@ -134,7 +139,7 @@ ok('无名称时 alert 提示', dom.window.__alerts.length === 1 && /名称/.tes
 log.push('— 老唐留空现价 → 不显示状态卡 —');
 setVal('l_price', '');
 ok('留空现价不显示市值/状态', !/当前市值/.test(htmlOf('cards3')) && !/持有区|低估|高估/.test(htmlOf('cards3')));
-ok('留空现价仍显示买/卖参考线', /买点参考线/.test(htmlOf('cards3')));
+ok('留空现价仍显示买/卖点(股价口径)', /买点股价/.test(htmlOf('cards3')) && /卖点股价/.test(htmlOf('cards3')));
 setVal('l_price', '370'); // 还原
 
 log.push('— 港股模式：币种一致的安全边际 + 港元换算 —');
@@ -170,6 +175,9 @@ setVal('stockName', '腾讯控股'); fire('stockName', 'change'); // 还原
 log.push('— 老唐 tab 港元折算 + 手输代码识别 —');
 ok('老唐卡片出现「三年后合理估值（港元）」', /三年后合理估值（港元）/.test(htmlOf('cards3')), htmlOf('cards3').slice(0, 120));
 ok('老唐卡片出现「理想买点/一年内卖点（港元）」', /理想买点（港元）/.test(htmlOf('cards3')) && /一年内卖点（港元）/.test(htmlOf('cards3')));
+// 相对买/卖点换算成股价（港股口径）：25000/90.95/0.856≈321.1，90000/90.95/0.856≈1156.0
+ok('港股模式相对买/卖点股价按港元折算(买点≈321.1)', /买点 321\.1/.test(htmlOf('cards3')), (htmlOf('cards3').match(/买点 [\d.,]+/) || ['无'])[0]);
+ok('港股模式相对买/卖点股价按港元折算(卖点≈1,156.0)', /1,156\.0/.test(htmlOf('cards3')), (htmlOf('cards3').match(/卖点 [\d.,]+/) || ['无'])[0]);
 ok('老唐表格也有港元行', /合理估值（港元）/.test(doc.querySelector('#ltable tbody').textContent));
 ok('老唐表格人民币行明确标注币种', /三年后合理估值（人民币）/.test(doc.querySelector('#ltable tbody').textContent));
 const grps = doc.querySelectorAll('#ltable tbody tr.grp');
@@ -177,7 +185,7 @@ ok('老唐表格有「人民币/港元」两组分组行', grps.length === 2 && 
 ok('股数单位显示为亿股(非“91 股”)', /亿股/.test(htmlOf('cards3')) && !/\d 股/.test(htmlOf('cards3')));
 // 空现价时，买/卖参考线也要折算成港元
 setVal('l_price', '');
-ok('空现价时参考线折算为港元', /买点参考线/.test(htmlOf('cards3')) && /（港元）|港元/.test(htmlOf('cards3')));
+ok('空现价时买卖点股价折算为港元', /买点股价/.test(htmlOf('cards3')) && /（港元）|港元/.test(htmlOf('cards3')));
 setVal('l_price', '426');
 // 手输港股代码（不在预设名里）也要自动切口径
 doc.getElementById('showHkd').checked = false; fire('showHkd', 'change');
@@ -238,9 +246,9 @@ ok('表头同步 PE = 20 / PE = 40', doc.getElementById('lth1').textContent.incl
 ok('假设速览 PE 档显示 20 / 40', /20 \/ 40/.test(txt('assume3')), txt('assume3'));
 setVal('l_pe1', 40); setVal('l_pe2', 20); // 反序输入
 ok('反序(40/20) 估值 80,000 / 40,000', /80,000/.test(lt()) && /40,000/.test(lt()));
-setVal('l_price', ''); // 清空现价 → 显示带 PE 标注的参考线
-ok('反序时买点参考线取较低 PE 档（PE20）', /买点参考线\(PE20\)/.test(htmlOf('cards3')), htmlOf('cards3').slice(0, 120));
-ok('反序时卖点参考线取较高 PE 档（PE40）', /卖点参考线\(PE40\)/.test(htmlOf('cards3')));
+setVal('l_price', ''); // 清空现价 → 显示带 PE 标注的买/卖点股价
+ok('反序时买点股价取较低 PE 档（PE20）', /买点股价\(PE20\)/.test(htmlOf('cards3')), htmlOf('cards3').slice(0, 120));
+ok('反序时卖点股价取较高 PE 档（PE40）', /卖点股价\(PE40\)/.test(htmlOf('cards3')));
 setVal('l_price', '426');
 setVal('l_pe1', 25); setVal('l_pe2', 30); // 还原
 ok('还原默认后估值 50,000 / 60,000', /50,000/.test(lt()) && /60,000/.test(lt()));
