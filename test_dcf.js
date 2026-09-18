@@ -56,10 +56,19 @@ ok('当前市值=34410', /34,410/.test(htmlOf('cards3')), '匹配到: ' + (htmlO
 // 34410 ∈ [25000,90000] → 持有区
 ok('状态判定为「持有区」', /持有区/.test(htmlOf('cards3')), '未命中持有区');
 // 相对买/卖点换算成股价：PE25买=25000/93=268.8、PE30卖=90000/93=967.7，现价 370
-ok('相对买/卖点卡换算成股价(买点≈268.8)', /268\.8/.test(htmlOf('cards3')), (htmlOf('cards3').match(/买点 [\d.,]+/) || ['无'])[0]);
-ok('相对买/卖点卡换算成股价(卖点≈967.7)', /967\.7/.test(htmlOf('cards3')), (htmlOf('cards3').match(/卖点 [\d.,]+/) || ['无'])[0]);
-ok('相对买/卖点卡含现价 370（同币种比较）', /现价 370/.test(htmlOf('cards3')));
+ok('相对买/卖点卡换算成股价(买点≈268.8)', /268\.8/.test(htmlOf('cards3')), htmlOf('cards3').slice(0, 160));
+ok('相对买/卖点卡换算成股价(卖点≈967.7)', /967\.7/.test(htmlOf('cards3')));
+ok('买点标红字(c-red)、卖点标绿字(c-green)', /class="c-red">268\.8/.test(htmlOf('cards3')) && /class="c-green">967\.7/.test(htmlOf('cards3')));
+ok('持有区：状态标签与现价均为橙色(mid)', /class="tag mid">持有区/.test(htmlOf('cards3')) && /class="pchip mid">370/.test(htmlOf('cards3')), htmlOf('cards3').slice(0, 200));
 ok('相对买/卖点卡仍保留市值口径买线/卖线', /买线 25,000/.test(htmlOf('cards3')) && /卖线 90,000/.test(htmlOf('cards3')));
+// 红绿标色（A 股习惯）：低估→红(low)、高估→绿(high)
+setVal('l_price', 200); // 市值 18,600 < 买线 25,000 → 低估
+ok('低估时状态标签标红(tag low)', /class="tag low">低估（可买）/.test(htmlOf('cards3')), htmlOf('cards3').slice(0, 140));
+ok('低估时现价标红底(pchip low)', /class="pchip low">200/.test(htmlOf('cards3')));
+setVal('l_price', 1200); // 市值 111,600 > 卖线 90,000 → 高估
+ok('高估时状态标签标绿(tag high)', /class="tag high">高估（可卖）/.test(htmlOf('cards3')));
+ok('高估时现价标绿底(pchip high)', /class="pchip high">1,200/.test(htmlOf('cards3')));
+setVal('l_price', 370); // 还原
 
 log.push('— 股票速填（改成贵州茅台 600519 → 股数12.5 股价1267）—');
 setVal('stockName', '贵州茅台');
@@ -176,8 +185,8 @@ log.push('— 老唐 tab 港元折算 + 手输代码识别 —');
 ok('老唐卡片出现「三年后合理估值（港元）」', /三年后合理估值（港元）/.test(htmlOf('cards3')), htmlOf('cards3').slice(0, 120));
 ok('老唐卡片出现「理想买点/一年内卖点（港元）」', /理想买点（港元）/.test(htmlOf('cards3')) && /一年内卖点（港元）/.test(htmlOf('cards3')));
 // 相对买/卖点换算成股价（港股口径）：25000/90.95/0.856≈321.1，90000/90.95/0.856≈1156.0
-ok('港股模式相对买/卖点股价按港元折算(买点≈321.1)', /买点 321\.1/.test(htmlOf('cards3')), (htmlOf('cards3').match(/买点 [\d.,]+/) || ['无'])[0]);
-ok('港股模式相对买/卖点股价按港元折算(卖点≈1,156.0)', /1,156\.0/.test(htmlOf('cards3')), (htmlOf('cards3').match(/卖点 [\d.,]+/) || ['无'])[0]);
+ok('港股模式相对买/卖点股价按港元折算(买点≈321.1)', /321\.1/.test(htmlOf('cards3')), htmlOf('cards3').slice(0, 160));
+ok('港股模式相对买/卖点股价按港元折算(卖点≈1,156.0)', /1,156\.0/.test(htmlOf('cards3')));
 ok('老唐表格也有港元行', /合理估值（港元）/.test(doc.querySelector('#ltable tbody').textContent));
 ok('老唐表格人民币行明确标注币种', /三年后合理估值（人民币）/.test(doc.querySelector('#ltable tbody').textContent));
 const grps = doc.querySelectorAll('#ltable tbody tr.grp');

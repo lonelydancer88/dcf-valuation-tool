@@ -65,6 +65,11 @@
   .rc .sub{font-size:11.5px;color:#9aa4b2;margin-top:2px}
   .tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;font-weight:600;color:#fff}
   .tag.good{background:var(--good)} .tag.bad{background:var(--bad)} .tag.warn{background:var(--warn)}
+  /* 老唐买卖点：按 A 股习惯标色 —— 低估/可买=红（机会）、高估/可卖=绿（风险）、持有区=橙 */
+  .tag.low{background:#e05656} .tag.high{background:#16a085} .tag.mid{background:#e0962f}
+  .c-red{color:#c0392b} .c-green{color:#0f6b57}
+  .pchip{display:inline-block;padding:0 7px;border-radius:6px;font-weight:650}
+  .pchip.low{background:#e05656;color:#fff} .pchip.high{background:#16a085;color:#fff} .pchip.mid{background:#eef0f3;color:#1f2733}
   table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
   th,td{padding:7px 8px;text-align:right;border-bottom:1px solid var(--line)}
   th:first-child,td:first-child{text-align:left}
@@ -529,13 +534,14 @@ function recalcLaotang(){
     const fx=readFx(), hkd=hkdMode()&&fx, adj=hkd?fx:1, unit=hkd?'港元':'人民币';
     const buyLine=r.buySrc.buy/adj, sellLine=r.sellSrc.sell/adj; // 低PE档买点 / 高PE档卖点（市值口径，用于状态判定）
     const buyShLine=r.buySrc.buySh/adj, sellShLine=r.sellSrc.sellSh/adj; // 换算成每股股价（与现价同币种）
+    // A 股习惯：低估/可买=红（机会）、高估/可卖=绿（风险）、持有区=橙
     let cls,label;
-    if(r.curCap<buyLine){cls='good';label='低估（可买）';}
-    else if(r.curCap>sellLine){cls='bad';label='高估（可卖）';}
-    else{cls='warn';label='持有区';}
+    if(r.curCap<buyLine){cls='low';label='低估（可买）';}
+    else if(r.curCap>sellLine){cls='high';label='高估（可卖）';}
+    else{cls='mid';label='持有区';}
     html+=`<div class="rc"><div class="k">当前市值</div><div class="v">${fmt(r.curCap)}</div><div class="sub">现价 ${fmt(r.price)} × ${fmt(r.shares,2)} 亿股（${unit}）</div></div>`;
-    html+=`<div class="rc"><div class="k">相对买/卖点（股价）</div><div class="v" style="font-size:17px"><span class="tag ${cls}">${label}</span></div>
-      <div class="sub">买点 ${fmt(buyShLine,1)} / 现价 ${fmt(r.price)} / 卖点 ${fmt(sellShLine,1)}（${unit}）</div>
+    html+=`<div class="rc"><div class="k">相对买/卖点（股价）</div><div class="v" style="font-size:15px;line-height:2"><span class="tag ${cls}">${label}</span></div>
+      <div class="sub" style="font-size:13px">买点 <b class="c-red">${fmt(buyShLine,1)}</b> / 现价 <b class="pchip ${cls}">${fmt(r.price)}</b> / 卖点 <b class="c-green">${fmt(sellShLine,1)}</b>（${unit}）</div>
       <div class="sub">对应市值 买线 ${fmt(buyLine)} / 卖线 ${fmt(sellLine)}（${unit}）</div></div>`;
   }else{
     const fx2=readFx(), hkd2=hkdMode()&&fx2, adj2=hkd2?fx2:1, unit2=hkd2?'港元':'人民币';
